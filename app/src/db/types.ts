@@ -55,6 +55,19 @@ export interface PaperPage {
   text: string
 }
 
+export interface TextChunk {
+  /** 稳定 ID：论文-页码-块序号；重新分块时覆盖同 ID 数据 */
+  id: string
+  projectId: number
+  paperId: number
+  page: number
+  /** 在该页原始 text 中的起止偏移，end 不包含在块内 */
+  startOffset: number
+  endOffset: number
+  text: string
+  createdAt: number
+}
+
 export interface Paper {
   id?: number
   projectId: number
@@ -104,6 +117,7 @@ export interface Element {
   page?: number
   /** 引文是否在当前论文分页文本中匹配成功 */
   verified?: boolean
+  source?: 'llm' | 'heuristic' | 'manual' | 'example'
   createdAt: number
 }
 
@@ -114,6 +128,7 @@ export interface ResourceLink {
   title: string
   url: string
   tier: ResourceTier
+  provider?: string
 }
 
 export interface Concept {

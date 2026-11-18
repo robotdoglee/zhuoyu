@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { db } from '../db/db'
 import type { Paper, PaperSource } from '../db/types'
 import { formatAuthors, formatNumber } from '../lib/format'
@@ -7,6 +7,7 @@ import PaperImporter, { type SavedNotice } from './PaperImporter'
 interface PaperSectionProps {
   projectId: number
   paper?: Paper
+  sourceRequest?: { page: number; quote?: string; nonce: number }
   onChanged: () => void
 }
 
@@ -18,7 +19,7 @@ const SOURCE_LABEL: Record<PaperSource, string> = {
   openalex: 'OpenAlex',
 }
 
-export default function PaperSection({ projectId, paper, onChanged }: PaperSectionProps) {
+export default function PaperSection({ projectId, paper, sourceRequest, onChanged }: PaperSectionProps) {
   const [mode, setMode] = useState<ImporterMode>(null)
   const [notice, setNotice] = useState<SavedNotice | null>(null)
 
@@ -42,7 +43,7 @@ export default function PaperSection({ projectId, paper, onChanged }: PaperSecti
   const showImporter = !paper || mode !== null
 
   return (
-    <section className="panel paper-panel">
+    <section className="panel paper-panel" id="paper-source">
       <header className="panel-head">
         <div>
           <p className="kicker">00 / 论文资料</p>
@@ -79,7 +80,7 @@ export default function PaperSection({ projectId, paper, onChanged }: PaperSecti
         </div>
       )}
 
-      {paper && !showImporter && <PaperDetails key={paper.id} paper={paper} />}
+      {paper && !showImporter && <PaperDetails key={paper.id} paper={paper} sourceRequest={sourceRequest} />}
 
       {showImporter && (
         <div className={paper ? 'importer-block' : ''}>
@@ -110,8 +111,19 @@ export default function PaperSection({ projectId, paper, onChanged }: PaperSecti
   )
 }
 
-function PaperDetails({ paper }: { paper: Paper }) {
+function PaperDetails({
+  paper,
+  sourceRequest,
+}: {
+  paper: Paper
+  sourceRequest?: { page: number; quote?: string; nonce: number }
+}) {
   const [page, setPage] = useState(paper.pages[0]?.page ?? 1)
+  useEffect(() => {
+    if (sourceRequest && paper.pages.some((entry) => entry.page === sourceRequest.page)) {
+      setPage(sourceRequest.page)
+    }
+  }, [paper.pages, sourceRequest])
   const selectedPage = paper.pages.find((entry) => entry.page === page) ?? paper.pages[0]
   const totalChars = paper.pages.reduce((sum, entry) => sum + entry.text.length, 0)
   const doiHref = paper.doi ? `https://doi.org/${paper.doi}` : undefined
@@ -122,7 +134,9 @@ function PaperDetails({ paper }: { paper: Paper }) {
         <div className="paper-heading">
           <div className="paper-badges">
             <span className="source-badge">{SOURCE_LABEL[paper.source]}</span>
-            {paper.pageCount > 0 && <span className="source-badge subtle">PDF 已解析</span>}
+            {paper.pageCount > 0 && (
+              <span className="source-badge subtle">{paper.fileName?.includes('内置') ? '示例文本已入库' : 'PDF 已解析'}</span>
+            )}
             {paper.year && <span className="paper-year">{paper.year}</span>}
           </div>
           <h3 className="paper-title">{paper.title}</h3>
@@ -211,6 +225,12 @@ function PaperDetails({ paper }: { paper: Paper }) {
               <span>页</span>
             </label>
           </div>
+          {sourceRequest?.quote && sourceRequest.page === selectedPage?.page && (
+            <div className="source-focus-quote">
+              <strong>正在核对这条引文</strong>
+              <blockquote>{sourceRequest.quote}</blockquote>
+            </div>
+          )}
           <pre className="page-text">
             {selectedPage?.text || '本页没有可提取的文本（可能是扫描页或纯图片页）。'}
           </pre>

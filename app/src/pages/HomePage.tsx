@@ -4,13 +4,29 @@ import NewProjectDialog from '../components/NewProjectDialog'
 import { db } from '../db/db'
 import { levelShort, type Paper, type Project } from '../db/types'
 import { formatDay } from '../lib/format'
+import { loadExampleProject } from '../lib/example'
 
 export default function HomePage() {
   const [projects, setProjects] = useState<Project[]>([])
   const [papers, setPapers] = useState<Paper[]>([])
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [exampleLoading, setExampleLoading] = useState(false)
+  const [exampleError, setExampleError] = useState('')
   const navigate = useNavigate()
+
+  async function openExample() {
+    setExampleLoading(true)
+    setExampleError('')
+    try {
+      const { projectId } = await loadExampleProject()
+      navigate(`/project/${projectId}`)
+    } catch (error) {
+      setExampleError(error instanceof Error ? error.message : '示例载入失败，请重试。')
+    } finally {
+      setExampleLoading(false)
+    }
+  }
 
   useEffect(() => {
     let active = true
@@ -59,10 +75,12 @@ export default function HomePage() {
             <button className="btn btn-primary" onClick={() => setDialogOpen(true)}>
               新建复现项目
             </button>
-            <a className="btn btn-ghost" href="#projects">
-              浏览项目
-            </a>
+            <button className="btn btn-ghost" disabled={exampleLoading} onClick={() => void openExample()}>
+              {exampleLoading ? '正在雕琢示例…' : '载入 Attention 示例'}
+            </button>
+            <a className="btn btn-quiet" href="#projects">浏览项目</a>
           </div>
+          {exampleError && <div className="notice error">{exampleError}</div>}
         </div>
 
         <aside className="hero-card" aria-label="琢玉简介">

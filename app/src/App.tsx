@@ -2,6 +2,7 @@ import { BrowserRouter, Link, Navigate, Route, Routes } from 'react-router-dom'
 import { BrandMark } from './components/BrandMark'
 import HomePage from './pages/HomePage'
 import ProjectPage from './pages/ProjectPage'
+import SettingsPage from './pages/SettingsPage'
 
 function SiteHeader() {
   return (
@@ -14,9 +15,12 @@ function SiteHeader() {
             <em>如切如磋，如琢如磨</em>
           </span>
         </Link>
-        <div className="header-note">
-          <span className="status-dot" aria-hidden="true" />
-          本地优先 · 数据只存这台设备
+        <div className="header-right">
+          <div className="header-note">
+            <span className="status-dot" aria-hidden="true" />
+            本地优先 · 数据只存这台设备
+          </div>
+          <Link to="/settings" className="settings-link">LLM 设置</Link>
         </div>
       </div>
     </header>
@@ -28,7 +32,7 @@ function SiteFooter() {
     <footer className="site-footer">
       <div className="container footer-inner">
         <span>琢玉 · 把论文亲手做一遍</span>
-        <span>M0 骨架 · 无后端 · 数据留在浏览器</span>
+        <span>M1 拆解与框图 · 无后端 · 数据留在浏览器</span>
       </div>
     </footer>
   )
@@ -43,6 +47,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<HomePage />} />
             <Route path="/project/:projectId" element={<ProjectPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>

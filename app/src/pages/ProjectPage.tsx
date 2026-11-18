@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState, type KeyboardEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import PaperSection from '../components/PaperSection'
+import BreakdownPanel from '../components/BreakdownPanel'
+import KnowledgeMap from '../components/KnowledgeMap'
 import { db } from '../db/db'
 import { levelName, type Paper, type Project } from '../db/types'
 import { formatDate } from '../lib/format'
@@ -70,6 +72,7 @@ export default function ProjectPage() {
   const [project, setProject] = useState<Project | null>(null)
   const [paper, setPaper] = useState<Paper | undefined>(undefined)
   const [activeTab, setActiveTab] = useState<TabId>('breakdown')
+  const [sourceRequest, setSourceRequest] = useState<{ page: number; quote?: string; nonce: number }>()
 
   const load = useCallback(async () => {
     if (!Number.isInteger(numericId)) {
@@ -91,6 +94,13 @@ export default function ProjectPage() {
   useEffect(() => {
     void load()
   }, [load])
+
+  function showSource(page: number, quote?: string) {
+    setSourceRequest({ page, quote, nonce: Date.now() })
+    window.requestAnimationFrame(() => {
+      document.getElementById('paper-source')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+  }
 
   function handleTabKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number) {
     if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return
@@ -148,7 +158,12 @@ export default function ProjectPage() {
         </div>
       </header>
 
-      <PaperSection projectId={project.id ?? numericId} paper={paper} onChanged={() => void load()} />
+      <PaperSection
+        projectId={project.id ?? numericId}
+        paper={paper}
+        sourceRequest={sourceRequest}
+        onChanged={() => void load()}
+      />
 
       <div className="tabs" role="tablist" aria-label="项目工作区">
         {TABS.map((tab, index) => (
@@ -177,26 +192,26 @@ export default function ProjectPage() {
         role="tabpanel"
         aria-labelledby={`project-tab-${active.id}`}
       >
-        <div className="placeholder-card">
-          <div className="placeholder-index" aria-hidden="true">
-            {active.index}
-          </div>
-          <div className="placeholder-body">
-            <div className="placeholder-top">
-              <h3>{active.title}</h3>
-              <span className="milestone-pill">{active.milestone} 里程碑</span>
+        {activeTab === 'breakdown' ? (
+          <BreakdownPanel projectId={project.id ?? numericId} paper={paper} onShowSource={showSource} />
+        ) : activeTab === 'map' ? (
+          <KnowledgeMap projectId={project.id ?? numericId} />
+        ) : (
+          <div className="placeholder-card">
+            <div className="placeholder-index" aria-hidden="true">{active.index}</div>
+            <div className="placeholder-body">
+              <div className="placeholder-top">
+                <h3>{active.title}</h3>
+                <span className="milestone-pill">{active.milestone} 里程碑</span>
+              </div>
+              <p className="placeholder-desc">{active.description}</p>
+              <ul className="placeholder-points">
+                {active.points.map((point) => <li key={point}>{point}</li>)}
+              </ul>
+              <p className="placeholder-foot">该模块按计划在后续里程碑交付，M1 的拆解与知识框图已可用。</p>
             </div>
-            <p className="placeholder-desc">{active.description}</p>
-            <ul className="placeholder-points">
-              {active.points.map((point) => (
-                <li key={point}>{point}</li>
-              ))}
-            </ul>
-            <p className="placeholder-foot">
-              当前为 M0 骨架占位，详细任务与验收标准见根目录 PLAN.md。
-            </p>
           </div>
-        </div>
+        )}
       </section>
     </div>
   )
