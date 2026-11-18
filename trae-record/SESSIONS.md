@@ -24,3 +24,4 @@
 | 20 | 2026-11-19 03:29 | M2 开始：新任务“实现琢玉M2核心功能模块”，提示词 prompts/05-m2-plan-notebook-metrics.md | 待查 | screenshots/2026-11-19_0329_20-m2-prompt-sent.png |
 | 21 | 2026-11-19 04:04 | 运行环境重启，TRAE 进程丢失；M2 进行中任务报 Model Request failed (3003)。已提交 WIP 快照 fb695e2，重装并重启 TRAE | 待查 | screenshots/2026-11-19_0405_21-sandbox-restart-3003.png |
 | 22 | 2026-11-19 04:08 | M2 续接提示词 prompts/06-m2-continue.md，同一任务继续 | 待查 | screenshots/2026-11-19_0408_22-m2-continue.png |
+| 23 | 2026-11-19 04:26 | M2：补齐记事本面板 NotebookPanel、计划↔记事本联动；build 通过、lint 0；浏览器验收中（复现计划页 L2、一键重新规划 v2、Console 0） | 待查 | screenshots/2026-11-19_0426_23-m2-plan-ui-acceptance.png |

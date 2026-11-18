@@ -263,7 +263,7 @@ export default function PlanPanel({ project, onOpenNotebook }: PlanPanelProps) {
 
           <div className="milestone-list">
             {groups.map((group) => (
-              <section className="milestone-group" key={group.milestone}>
+              <section className="milestone-group" key={`${group.milestone}-${group.steps[0]?.id ?? 'empty'}`}>
                 <header><h3>{group.milestone}</h3><span>{group.steps.length} 步 · {formatMinutes(group.steps.reduce((sum, step) => sum + (step.estimatedMinutes ?? 0), 0))}</span></header>
                 <div className="plan-step-list">
                   {group.steps.map((step) => (
