@@ -21,3 +21,4 @@
 | 17 | 2026-11-19 02:38 | 死循环修复（受控状态 + Dexie 写入时机），Console 0 报错，Browser Use Agent 逐项验收 DAG 联动 | 6afdeca2651900d875a50fda | screenshots/2026-11-19_0238_17-m1-loop-fixed-console-0.png |
 | 18 | 2026-11-19 03:04 | 本地链式代理凭据过期导致 TRAE 弹 Proxy 407、任务报 600 中断；已重启代理（curl 200），死循环修复已 Keep All，build 通过 | 6afdeca2651900d875a50fda | screenshots/2026-11-19_0304_18-proxy-407-error-600.png |
 | 19 | 2026-11-19 03:26 | M1 收尾验收完成（新任务“完成项目验收与更新 README”）：示例项目 10 节点 6 边、学习路径 7 步、无 key 启发式拆解 24 条（全部核实）、Console 0 error、npm run build 通过；修复 StrictMode 重复写入 ConstraintError（bulkPut），README 更新至 M1。npm test 被 TRAE 沙箱拦截未执行 | 待查 | screenshots/2026-11-19_0328_19-m1-acceptance-done.png |
+| 20 | 2026-11-19 03:29 | M2 开始：新任务“实现琢玉M2核心功能模块”，提示词 prompts/05-m2-plan-notebook-metrics.md | 待查 | screenshots/2026-11-19_0329_20-m2-prompt-sent.png |
