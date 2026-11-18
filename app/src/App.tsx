@@ -32,7 +32,7 @@ function SiteFooter() {
     <footer className="site-footer">
       <div className="container footer-inner">
         <span>琢玉 · 把论文亲手做一遍</span>
-        <span>M1 拆解与框图 · 无后端 · 数据留在浏览器</span>
+        <span>M2 计划与记事本 · 无后端 · 数据留在浏览器</span>
       </div>
     </footer>
   )

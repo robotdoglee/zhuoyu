@@ -1,5 +1,5 @@
 import { db } from '../db/db'
-import type { Concept, ElementType, PaperPage, ResourceLink } from '../db/types'
+import type { Concept, ElementType, NoteEntry, PaperPage, ResourceLink } from '../db/types'
 import { verifyAnchor } from './anchors'
 
 const EXAMPLE_PROJECT_TITLE = 'Attention Is All You Need（L2 复现）'
@@ -480,11 +480,14 @@ const EXAMPLE_DEPENDENCIES: Record<string, string[]> = {
 }
 
 export async function loadExampleProject(): Promise<{ projectId: number; existing: boolean }> {
-  return db.transaction('rw', [db.projects, db.papers, db.elements, db.concepts], async () => {
+  return db.transaction('rw', [db.projects, db.papers, db.elements, db.concepts, db.planSteps, db.notes, db.metrics], async () => {
     const existing = (await db.projects.toArray()).find(
       (project) => project.title === EXAMPLE_PROJECT_TITLE,
     )
-    if (existing?.id !== undefined) return { projectId: existing.id, existing: true }
+    if (existing?.id !== undefined) {
+      await ensureExampleM2Data(existing.id, Date.now())
+      return { projectId: existing.id, existing: true }
+    }
 
     const now = Date.now()
     const projectId = await db.projects.add({
@@ -562,6 +565,103 @@ export async function loadExampleProject(): Promise<{ projectId: number; existin
       await db.concepts.update(conceptIds.get(concept.name)!, { dependsOn })
     }
 
+    await ensureExampleM2Data(projectId, now)
     return { projectId, existing: false }
   })
+}
+
+/** M1 已创建的同名示例也会幂等补齐 M2 数据，不覆盖已有计划或指标修改。 */
+async function ensureExampleM2Data(projectId: number, now: number): Promise<void> {
+  const concepts = await db.concepts.where('projectId').equals(projectId).toArray()
+  const conceptIds = new Map(concepts.flatMap((concept) => concept.id === undefined ? [] : [[concept.name, concept.id]]))
+  let steps = await db.planSteps.where('projectId').equals(projectId).toArray()
+
+  if (steps.length === 0) {
+    const seeds = [
+      { milestone: '一、锁定复现口径', title: '固定官方代码与运行环境', detail: '记录 tensor2tensor 版本、依赖、GPU 与随机种子，先跑通官方最小命令。', estimatedMinutes: 60, status: 'done' as const, checkpoint: '环境可导入，官方最小命令运行成功，版本信息已记录。', checkpointDone: true, concepts: ['Encoder-Decoder'] },
+      { milestone: '一、锁定复现口径', title: '核对 WMT14 数据与共享 BPE', detail: '固定数据版本、共享词表和测试集 tokenization，抽样检查句对。', estimatedMinutes: 90, status: 'done' as const, checkpoint: '数据规模与论文一致，BPE 样例与评测预处理一致。', checkpointDone: true, concepts: ['BPE 分词', 'BLEU'] },
+      { milestone: '二、对齐 Base 训练', title: '对齐 Transformer Base 配置', detail: '核对 6 层、8 头、dropout 0.1、标签平滑 0.1 与位置编码。', estimatedMinutes: 75, status: 'doing' as const, checkpoint: '配置 diff 无未解释项，模型参数量和张量形状检查通过。', checkpointDone: false, concepts: ['多头注意力', '位置编码', '残差与 LayerNorm', '标签平滑'] },
+      { milestone: '二、对齐 Base 训练', title: '短跑后完成正式训练', detail: '先确认损失、显存和 step 时间，再按 Adam 与 4,000 步预热配置正式训练。', estimatedMinutes: 360, status: 'todo' as const, checkpoint: '保存完整日志、最佳 checkpoint 与可复跑训练命令。', checkpointDone: false, concepts: ['Adam 与学习率预热'] },
+      { milestone: '三、主表评测', title: '统一评测 newstest2014 BLEU', detail: '用同一 tokenization 和评测脚本得到 Base/Big 指标，录入对照表。', estimatedMinutes: 60, status: 'todo' as const, checkpoint: 'Base/Big  BLEU 均已录入，评测命令和输出已保存。', checkpointDone: false, concepts: ['BLEU'] },
+      { milestone: '四、偏差归因', title: '复核偏差并安排补充实验', detail: '围绕数据、超参、随机种子和硬件解释偏差，必要时做一组控制变量实验。', estimatedMinutes: 75, status: 'todo' as const, checkpoint: '每个明显偏差都有证据或下一步验证动作。', checkpointDone: false, concepts: ['BLEU', 'Adam 与学习率预热'] },
+    ]
+    for (const [order, seed] of seeds.entries()) {
+      await db.planSteps.add({
+        projectId,
+        milestone: seed.milestone,
+        version: 1,
+        title: seed.title,
+        detail: seed.detail,
+        order,
+        estimatedMinutes: seed.estimatedMinutes,
+        status: seed.status,
+        checkpoint: seed.checkpoint,
+        checkpointDone: seed.checkpointDone,
+        conceptIds: seed.concepts.flatMap((name) => {
+          const id = conceptIds.get(name)
+          return id === undefined ? [] : [id]
+        }),
+        source: 'example',
+        createdAt: now,
+        updatedAt: now,
+      })
+    }
+    steps = await db.planSteps.where('projectId').equals(projectId).toArray()
+  }
+
+  const exampleNotes = await db.notes.where('projectId').equals(projectId).toArray()
+    .then((rows) => rows.filter((note) => note.source === 'example'))
+  if (exampleNotes.length === 0 && steps.length > 0) {
+    const noteSeeds = [
+      {
+        stepTitle: '固定官方代码与运行环境', kind: 'command' as const, conceptNames: ['Encoder-Decoder'], complete: true,
+        content: '环境已固定，先记录最小运行命令。\n\n```bash\npython -m tensor2tensor.trainer --problem=translate_ende_wmt32k --model=transformer --hparams_set=transformer_base --train_steps=100\n```\n\n结果：进程正常结束，依赖版本已写入环境清单。',
+      },
+      {
+        stepTitle: '核对 WMT14 数据与共享 BPE', kind: 'result' as const, conceptNames: ['BPE 分词', 'BLEU'], complete: true,
+        content: '抽样 100 句检查共享 BPE，训练与评测使用同一 tokenization。\n\n- 训练句对约 450 万，与论文第 5 页一致\n- 共享词表约 37,000 token\n- **检查点已完成**，后续不再混用评测分词器。',
+      },
+      {
+        stepTitle: '对齐 Transformer Base 配置', kind: 'idea' as const, conceptNames: ['多头注意力', 'Adam 与学习率预热'], complete: false,
+        content: '配置复核时发现框架默认 Adam β₂ 与论文不同：默认通常是 `0.999`，论文为 **0.98**。\n\n下一步把 β₂、4,000 步预热和标签平滑加入配置 diff，避免短跑损失正常但最终 BLEU 偏离。',
+      },
+    ]
+    for (const [index, seed] of noteSeeds.entries()) {
+      const step = steps.find((item) => item.title === seed.stepTitle) ?? steps[Math.min(index, steps.length - 1)]
+      const stepId = step.id
+      const ids = seed.conceptNames.flatMap((name) => {
+        const id = conceptIds.get(name)
+        return id === undefined ? [] : [id]
+      })
+      const references = [
+        ...seed.conceptNames.map((name) => `[@卡片：${name}](#concept-${conceptIds.get(name)})`),
+        ...(stepId === undefined ? [] : [`[@步骤：${step.title}](#step-${stepId})`]),
+      ]
+      const note: Omit<NoteEntry, 'id'> = {
+        projectId,
+        stepId,
+        kind: seed.kind,
+        content: `${seed.content}\n\n${references.join(' · ')}`,
+        conceptIds: ids,
+        stepIds: stepId === undefined ? [] : [stepId],
+        completeCheckpoint: seed.complete,
+        completeStep: seed.complete,
+        source: 'example',
+        createdAt: now + index,
+        updatedAt: now + index,
+      }
+      await db.notes.add(note)
+    }
+  }
+
+  const existingMetrics = await db.metrics.where('projectId').equals(projectId).toArray()
+  const metricSeeds = [
+    { name: 'Transformer Base · 英德 BLEU', ours: 26.9, paperValue: 27.3, unit: 'BLEU', higherIsBetter: true },
+    { name: 'Transformer Big · 英德 BLEU', ours: 28.1, paperValue: 28.4, unit: 'BLEU', higherIsBetter: true },
+  ]
+  for (const [index, metric] of metricSeeds.entries()) {
+    if (!existingMetrics.some((item) => item.name === metric.name)) {
+      await db.metrics.add({ ...metric, projectId, createdAt: now + index })
+    }
+  }
 }

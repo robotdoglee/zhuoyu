@@ -3,6 +3,9 @@ import { Link, useParams } from 'react-router-dom'
 import PaperSection from '../components/PaperSection'
 import BreakdownPanel from '../components/BreakdownPanel'
 import KnowledgeMap from '../components/KnowledgeMap'
+import PlanPanel from '../components/PlanPanel'
+import NotebookPanel from '../components/NotebookPanel'
+import MetricTable from '../components/MetricTable'
 import { db } from '../db/db'
 import { levelName, type Paper, type Project } from '../db/types'
 import { formatDate } from '../lib/format'
@@ -196,6 +199,13 @@ export default function ProjectPage() {
           <BreakdownPanel projectId={project.id ?? numericId} paper={paper} onShowSource={showSource} />
         ) : activeTab === 'map' ? (
           <KnowledgeMap projectId={project.id ?? numericId} />
+        ) : activeTab === 'plan' ? (
+          <PlanPanel project={project} onOpenNotebook={() => setActiveTab('notebook')} />
+        ) : activeTab === 'notebook' ? (
+          <>
+            <NotebookPanel projectId={project.id ?? numericId} onOpenPlan={() => setActiveTab('plan')} />
+            <MetricTable projectId={project.id ?? numericId} />
+          </>
         ) : (
           <div className="placeholder-card">
             <div className="placeholder-index" aria-hidden="true">{active.index}</div>
@@ -208,7 +218,7 @@ export default function ProjectPage() {
               <ul className="placeholder-points">
                 {active.points.map((point) => <li key={point}>{point}</li>)}
               </ul>
-              <p className="placeholder-foot">该模块按计划在后续里程碑交付，M1 的拆解与知识框图已可用。</p>
+              <p className="placeholder-foot">M1 拆解与框图、M2 计划与记事本已可用；该模块将在后续里程碑交付。</p>
             </div>
           </div>
         )}

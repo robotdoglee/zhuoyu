@@ -151,20 +151,40 @@ export interface Concept {
 
 export type PlanStepStatus = 'todo' | 'doing' | 'done' | 'blocked'
 
+export type PlanStepSource = 'heuristic' | 'llm' | 'manual' | 'example'
+
 export interface PlanStep {
   id?: number
   projectId: number
+  /** 所属里程碑；步骤在同一项目内可跨里程碑排序 */
+  milestone: string
+  /** 当前计划版本；历史版本完整保存在 planVersions 中 */
+  version: number
   title: string
   detail?: string
   order: number
   estimatedMinutes?: number
   status: PlanStepStatus
   checkpoint?: string
+  checkpointDone: boolean
   conceptIds: number[]
+  source: PlanStepSource
+  createdAt: number
+  updatedAt: number
+}
+
+/** 重新规划前的只读快照；步骤仍保留原 id 便于追溯旧笔记。 */
+export interface PlanVersion {
+  id?: number
+  projectId: number
+  version: number
+  reason: string
+  steps: PlanStep[]
   createdAt: number
 }
 
 export type NoteKind = 'command' | 'code' | 'result' | 'error' | 'idea' | 'image'
+export type NoteSource = 'manual' | 'example' | 'error-assistant'
 
 export interface NoteEntry {
   id?: number
@@ -173,6 +193,15 @@ export interface NoteEntry {
   kind: NoteKind
   /** Markdown 内容 */
   content: string
+  /** @卡片与 @步骤 的稳定引用，显示文本可单独编辑 */
+  conceptIds: number[]
+  stepIds: number[]
+  /** 保存这条记录时执行的联动动作 */
+  completeCheckpoint: boolean
+  completeStep: boolean
+  /** 截图的本地 Data URL，不发起外部请求 */
+  imageData?: string
+  source: NoteSource
   createdAt: number
   updatedAt: number
 }
