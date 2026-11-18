@@ -1,24 +1,13 @@
 import { useState, type FormEvent } from 'react'
-import type { Concept, Mastery, ResourceLink, ResourceTier } from '../db/types'
+import type { Concept, Mastery, ResourceLink } from '../db/types'
 import { searchLinks, searchResources } from '../lib/resources'
+import { TIER_LABEL } from '../lib/labels'
 
 interface ConceptDialogProps {
   concept?: Concept
   projectId: number
   onClose: () => void
   onSave: (concept: Concept) => Promise<void>
-}
-
-export const MASTERY_LABEL: Record<Mastery, string> = {
-  known: '会',
-  half: '半会',
-  unknown: '不会',
-}
-
-export const TIER_LABEL: Record<ResourceTier, string> = {
-  primary: '一手论文 / 官方仓库',
-  secondary: '教材 / Wikipedia',
-  blog: '博客 / 视频 · 未经同行评审',
 }
 
 export default function ConceptDialog({ concept, projectId, onClose, onSave }: ConceptDialogProps) {

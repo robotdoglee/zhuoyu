@@ -7,6 +7,9 @@ import type { Concept, HiddenDetailType, NoteEntry, NoteKind, PlanStep } from '.
 import { diagnoseErrorLog, diagnosisToMarkdown, type ErrorDiagnosis } from '../lib/errorAssistant'
 import { HIDDEN_DETAIL_LABEL } from '../lib/retrospective'
 import { loadLlmSettings } from '../lib/settings'
+import { usePagination } from '../lib/usePagination'
+import AsyncState from './AsyncState'
+import Pagination from './Pagination'
 
 const KIND_LABEL: Record<NoteKind, string> = {
   command: '命令', code: '代码', result: '结果', error: '报错', idea: '想法', image: '截图',
@@ -30,6 +33,7 @@ export default function NotebookPanel({ projectId, onOpenPlan }: NotebookPanelPr
   const [steps, setSteps] = useState<PlanStep[]>([])
   const [concepts, setConcepts] = useState<Concept[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [kind, setKind] = useState<NoteKind>('command')
   const [stepId, setStepId] = useState<number | ''>('')
   const [content, setContent] = useState('')
@@ -53,21 +57,31 @@ export default function NotebookPanel({ projectId, onOpenPlan }: NotebookPanelPr
   const hasKey = Boolean(settings.apiKey.trim())
 
   const load = useCallback(async () => {
-    const [noteRows, stepRows, conceptRows] = await Promise.all([
-      db.notes.where('projectId').equals(projectId).toArray(),
-      db.planSteps.where('projectId').equals(projectId).toArray(),
-      db.concepts.where('projectId').equals(projectId).toArray(),
-    ])
-    const sortedSteps = stepRows.sort((a, b) => a.order - b.order)
-    setNotes(noteRows.sort((a, b) => b.createdAt - a.createdAt))
-    setSteps(sortedSteps)
-    setConcepts(conceptRows.sort((a, b) => a.createdAt - b.createdAt))
-    setStepId((current) => current || sortedSteps.find((step) => step.status !== 'done')?.id || sortedSteps[0]?.id || '')
-    setErrorStepId((current) => current || sortedSteps.find((step) => step.status === 'doing')?.id || sortedSteps[0]?.id || '')
-    setLoading(false)
+    setLoading(true)
+    setLoadError('')
+    try {
+      const [noteRows, stepRows, conceptRows] = await Promise.all([
+        db.notes.where('projectId').equals(projectId).toArray(),
+        db.planSteps.where('projectId').equals(projectId).toArray(),
+        db.concepts.where('projectId').equals(projectId).toArray(),
+      ])
+      const sortedSteps = stepRows.sort((a, b) => a.order - b.order)
+      setNotes(noteRows.sort((a, b) => b.createdAt - a.createdAt))
+      setSteps(sortedSteps)
+      setConcepts(conceptRows.sort((a, b) => a.createdAt - b.createdAt))
+      setStepId((current) => current || sortedSteps.find((step) => step.status !== 'done')?.id || sortedSteps[0]?.id || '')
+      setErrorStepId((current) => current || sortedSteps.find((step) => step.status === 'doing')?.id || sortedSteps[0]?.id || '')
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : '记事本读取失败，请重试。')
+    } finally {
+      setLoading(false)
+    }
   }, [projectId])
 
-  useEffect(() => { void load() }, [load])
+  useEffect(() => {
+    const timer = window.setTimeout(() => void load(), 0)
+    return () => window.clearTimeout(timer)
+  }, [load])
 
   const filteredNotes = useMemo(
     () => stepFilter === 'all' ? notes : notes.filter((note) => note.stepId === stepFilter || note.stepIds.includes(stepFilter)),
@@ -75,6 +89,13 @@ export default function NotebookPanel({ projectId, onOpenPlan }: NotebookPanelPr
   )
   const selectedStep = steps.find((step) => step.id === stepId)
   const hiddenNotes = useMemo(() => notes.filter((note) => note.isHiddenDetail), [notes])
+  const pagination = usePagination(filteredNotes, `${projectId}-${stepFilter}`)
+  const hiddenPagination = usePagination(hiddenNotes, `hidden-${projectId}`)
+
+  function focusComposer() {
+    document.getElementById('note-composer-title')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    textareaRef.current?.focus()
+  }
 
   function insertMention(type: 'concept' | 'step', id: number, label: string) {
     const token = `[@${type === 'concept' ? '卡片' : '步骤'}：${label}](#${type}-${id})`
@@ -301,19 +322,39 @@ export default function NotebookPanel({ projectId, onOpenPlan }: NotebookPanelPr
 
       <section className="hidden-details-column" aria-labelledby="hidden-details-title">
         <header><div><p className="kicker">M3 / 论文没写的细节</p><h3 id="hidden-details-title">那些只有亲手做过才知道的事</h3><p>隐藏超参、预处理与评测口径会在这里单独沉淀，并在复盘中高亮。</p></div><span>{hiddenNotes.length} 条</span></header>
-        {hiddenNotes.length === 0 ? <p className="hidden-details-empty">还没有标记。新记录可勾选「论文没写的细节」，已有记录也可一键汇入。</p> : <div className="hidden-detail-list">{hiddenNotes.map((note) => <article key={note.id}>
-          <div><span>{HIDDEN_DETAIL_LABEL[note.hiddenDetailType ?? 'other']}</span><a href={`#note-${note.id}`}>查看原记录 #{note.id} →</a></div>
-          <p>{note.content || '（本地截图记录）'}</p>
-          <label>细节分类<select aria-label={`记录 ${note.id} 的细节分类`} value={note.hiddenDetailType ?? 'other'} onChange={(event) => void changeHiddenType(note, event.target.value as HiddenDetailType)}>{Object.entries(HIDDEN_DETAIL_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-        </article>)}</div>}
+        {hiddenNotes.length === 0 ? <p className="hidden-details-empty">还没有标记。新记录可勾选「论文没写的细节」，已有记录也可一键汇入。</p> : <>
+          <div className="hidden-detail-list">{hiddenPagination.pageItems.map((note) => <article key={note.id}>
+            <div><span>{HIDDEN_DETAIL_LABEL[note.hiddenDetailType ?? 'other']}</span><a href={`#note-${note.id}`}>查看原记录 #{note.id} →</a></div>
+            <p>{note.content || '（本地截图记录）'}</p>
+            <label>细节分类<select aria-label={`记录 ${note.id} 的细节分类`} value={note.hiddenDetailType ?? 'other'} onChange={(event) => void changeHiddenType(note, event.target.value as HiddenDetailType)}>{Object.entries(HIDDEN_DETAIL_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+          </article>)}</div>
+          {hiddenPagination.isPaginated && <Pagination total={hiddenNotes.length} page={hiddenPagination.page} pageCount={hiddenPagination.pageCount} onPageChange={hiddenPagination.setPage} label="论文细节" />}
+        </>}
       </section>
 
       <section className="note-list-section" aria-labelledby="note-list-title">
         <header><div><p className="kicker">记录流</p><h3 id="note-list-title">复现过程，按时间倒序</h3></div><label>筛选步骤<select value={stepFilter} onChange={(event) => setStepFilter(event.target.value === 'all' ? 'all' : Number(event.target.value))}><option value="all">全部记录（{notes.length}）</option>{steps.map((step) => <option key={step.id} value={step.id}>{step.title}</option>)}</select></label></header>
-        {loading ? <div className="page-loading"><span className="loading-dot" />正在读取记录…</div> : filteredNotes.length === 0 ? <div className="note-list-empty"><span>还没有{stepFilter === 'all' ? '' : '这一步的'}记录。先保存一条命令、结果或想法。</span></div> : <div className="note-list">{filteredNotes.map((note) => {
-          const step = steps.find((item) => item.id === note.stepId)
-          return <article className={`note-card note-${note.kind} ${note.isHiddenDetail ? 'is-hidden-detail' : ''}`} key={note.id} id={`note-${note.id}`}><header><div><span className={`note-kind kind-${note.kind}`}>{KIND_LABEL[note.kind]}</span>{note.source === 'error-assistant' && <span className="note-source">报错助手</span>}{note.source === 'example' && <span className="note-source">示例</span>}{note.isHiddenDetail && <span className="note-hidden-badge">论文没写的细节 · {HIDDEN_DETAIL_LABEL[note.hiddenDetailType ?? 'other']}</span>}<time>{new Date(note.createdAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</time></div><div className="note-card-actions"><button className="btn btn-quiet btn-sm" onClick={() => void toggleHiddenDetail(note)}>{note.isHiddenDetail ? '移出细节专栏' : '标为论文细节'}</button><button className="btn btn-quiet btn-sm danger" onClick={() => void removeNote(note)}>删除</button></div></header><div className="note-step-reference">{step ? `@步骤：${step.title}` : note.stepId ? '@步骤：原步骤已删除' : '自由记录'}</div><div className="markdown-body"><NoteMarkdown content={note.content || '（截图记录）'} onStepMention={(id) => setStepFilter(id)} />{note.imageData && <img className="note-image" src={note.imageData} alt="复现过程截图" />}</div>{(note.completeCheckpoint || note.completeStep) && <footer><span className="note-writeback">{note.completeStep ? '✓ 已回写：检查点完成 · 步骤完成' : '✓ 已回写：检查点完成'}</span></footer>}</article>
-        })}</div>}
+        {loading ? (
+          <AsyncState status="loading" title="正在读取记录…" compact />
+        ) : loadError ? (
+          <AsyncState status="error" title="记事本没有读取成功" description={loadError} action={{ label: '重新读取', onClick: () => void load() }} compact />
+        ) : filteredNotes.length === 0 ? (
+          <AsyncState
+            status="empty"
+            title={stepFilter === 'all' ? '还没有复现记录' : '这一步还没有记录'}
+            description="先保存一条命令、结果或想法，下一次排查就有据可查。"
+            action={{ label: '写第一条记录', onClick: focusComposer }}
+            compact
+          />
+        ) : (
+          <>
+            <div className="note-list">{pagination.pageItems.map((note) => {
+              const step = steps.find((item) => item.id === note.stepId)
+              return <article className={`note-card note-${note.kind} ${note.isHiddenDetail ? 'is-hidden-detail' : ''}`} key={note.id} id={`note-${note.id}`}><header><div><span className={`note-kind kind-${note.kind}`}>{KIND_LABEL[note.kind]}</span>{note.source === 'error-assistant' && <span className="note-source">报错助手</span>}{note.source === 'example' && <span className="note-source">示例</span>}{note.isHiddenDetail && <span className="note-hidden-badge">论文没写的细节 · {HIDDEN_DETAIL_LABEL[note.hiddenDetailType ?? 'other']}</span>}<time>{new Date(note.createdAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</time></div><div className="note-card-actions"><button className="btn btn-quiet btn-sm" onClick={() => void toggleHiddenDetail(note)}>{note.isHiddenDetail ? '移出细节专栏' : '标为论文细节'}</button><button className="btn btn-quiet btn-sm danger" onClick={() => void removeNote(note)}>删除</button></div></header><div className="note-step-reference">{step ? `@步骤：${step.title}` : note.stepId ? '@步骤：原步骤已删除' : '自由记录'}</div><div className="markdown-body"><NoteMarkdown content={note.content || '（截图记录）'} onStepMention={(id) => setStepFilter(id)} />{note.imageData && <img className="note-image" src={note.imageData} alt="复现过程截图" />}</div>{(note.completeCheckpoint || note.completeStep) && <footer><span className="note-writeback">{note.completeStep ? '✓ 已回写：检查点完成 · 步骤完成' : '✓ 已回写：检查点完成'}</span></footer>}</article>
+            })}</div>
+            {pagination.isPaginated && <Pagination total={filteredNotes.length} page={pagination.page} pageCount={pagination.pageCount} onPageChange={pagination.setPage} label="记事本" />}
+          </>
+        )}
       </section>
     </div>
   )

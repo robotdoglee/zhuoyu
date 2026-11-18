@@ -24,6 +24,7 @@ import {
   type PlanDraft,
 } from '../lib/plan'
 import { loadLlmSettings } from '../lib/settings'
+import AsyncState from './AsyncState'
 
 const STATUS_LABEL: Record<PlanStepStatus, string> = {
   todo: '待办', doing: '进行中', done: '完成', blocked: '受阻',
@@ -43,6 +44,8 @@ export default function PlanPanel({ project, onOpenNotebook }: PlanPanelProps) {
   const [chunks, setChunks] = useState<TextChunk[]>([])
   const [histories, setHistories] = useState<PlanVersion[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+  const [failedOperation, setFailedOperation] = useState<{ type: 'generate'; mode: 'llm' | 'heuristic' } | { type: 'replan' } | null>(null)
   const [busy, setBusy] = useState<'generate' | 'replan' | null>(null)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -54,6 +57,7 @@ export default function PlanPanel({ project, onOpenNotebook }: PlanPanelProps) {
 
   const load = useCallback(async () => {
     setLoading(true)
+    setLoadError('')
     try {
       const [stepRows, conceptRows, elementRows, chunkRows, historyRows] = await Promise.all([
         db.planSteps.where('projectId').equals(projectId).toArray(),
@@ -67,12 +71,17 @@ export default function PlanPanel({ project, onOpenNotebook }: PlanPanelProps) {
       setElements(elementRows)
       setChunks(chunkRows)
       setHistories(historyRows.sort((a, b) => b.createdAt - a.createdAt))
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : '计划读取失败，请重试。')
     } finally {
       setLoading(false)
     }
   }, [projectId])
 
-  useEffect(() => { void load() }, [load])
+  useEffect(() => {
+    const timer = window.setTimeout(() => void load(), 0)
+    return () => window.clearTimeout(timer)
+  }, [load])
 
   const groups = useMemo(() => groupByMilestone(steps), [steps])
   const doneCount = steps.filter((step) => step.status === 'done').length
@@ -86,6 +95,7 @@ export default function PlanPanel({ project, onOpenNotebook }: PlanPanelProps) {
     setBusy('generate')
     setError('')
     setNotice('')
+    setFailedOperation(null)
     try {
       const drafts = mode === 'llm'
         ? await generatePlanWithLlm(loadLlmSettings(), project, concepts, elements, chunks)
@@ -96,6 +106,7 @@ export default function PlanPanel({ project, onOpenNotebook }: PlanPanelProps) {
       await load()
     } catch (err) {
       setError(err instanceof Error ? err.message : '计划生成失败，请重试。')
+      setFailedOperation({ type: 'generate', mode })
     } finally {
       setBusy(null)
     }
@@ -106,6 +117,7 @@ export default function PlanPanel({ project, onOpenNotebook }: PlanPanelProps) {
     setBusy('replan')
     setError('')
     setNotice('')
+    setFailedOperation(null)
     try {
       const drafts = replanSteps(steps, concepts)
       const added = drafts.length - steps.length
@@ -114,6 +126,7 @@ export default function PlanPanel({ project, onOpenNotebook }: PlanPanelProps) {
       await load()
     } catch (err) {
       setError(err instanceof Error ? err.message : '重新规划失败，请重试。')
+      setFailedOperation({ type: 'replan' })
     } finally {
       setBusy(null)
     }
@@ -224,20 +237,21 @@ export default function PlanPanel({ project, onOpenNotebook }: PlanPanelProps) {
           : '未配置 Key，使用内置分级模板，不上传任何项目内容；生成后仍可逐步编辑。'}</span>
         <Link to="/settings">LLM 设置 →</Link>
       </div>
-      {error && <div className="notice error" role="alert">{error}</div>}
+      {error && <div className="notice error" role="alert"><span>{error}</span>{failedOperation && <button className="btn btn-ghost btn-sm" onClick={() => failedOperation.type === 'generate' ? void generate(failedOperation.mode) : void replan()}>重试</button>}</div>}
       {notice && <div className="notice ok" role="status">{notice}</div>}
 
       {loading ? (
-        <div className="page-loading"><span className="loading-dot" />正在读取计划…</div>
+        <AsyncState status="loading" title="正在读取计划…" description="正在整理里程碑、检查点与历史版本。" />
+      ) : loadError ? (
+        <AsyncState status="error" title="复现计划没有读取成功" description={loadError} action={{ label: '重新读取', onClick: () => void load() }} />
       ) : steps.length === 0 ? (
-        <div className="empty-state plan-empty">
-          <div className="empty-glyph" aria-hidden="true">划</div>
-          <h3>还没有复现计划</h3>
-          <p>根据 {project.level} 目标生成第一版。以后每次重新规划都会留下只读快照。</p>
-          <button className="btn btn-primary" disabled={busy !== null} onClick={() => void generate(hasKey ? 'llm' : 'heuristic')}>
-            生成 {project.level} 计划
-          </button>
-        </div>
+        <AsyncState
+          status="empty"
+          title="还没有复现计划"
+          description={`根据 ${project.level} 目标生成第一版，以后每次重新规划都会留下只读快照。`}
+          action={{ label: `生成 ${project.level} 计划`, onClick: () => void generate(hasKey ? 'llm' : 'heuristic'), disabled: busy !== null }}
+          secondaryAction={{ label: '手工新增步骤', onClick: () => setEditing('new') }}
+        />
       ) : (
         <>
           <section className="plan-overview" aria-label="计划概览">

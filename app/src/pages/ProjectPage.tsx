@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type KeyboardEvent } from 'react'
-import { Link, useParams, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import PaperSection from '../components/PaperSection'
 import BreakdownPanel from '../components/BreakdownPanel'
 import KnowledgeMap from '../components/KnowledgeMap'
@@ -7,6 +7,7 @@ import PlanPanel from '../components/PlanPanel'
 import NotebookPanel from '../components/NotebookPanel'
 import MetricTable from '../components/MetricTable'
 import RetrospectivePanel from '../components/RetrospectivePanel'
+import AsyncState from '../components/AsyncState'
 import { db } from '../db/db'
 import { levelName, type Paper, type Project } from '../db/types'
 import { formatDate } from '../lib/format'
@@ -66,7 +67,7 @@ const TABS = [
 
 type TabId = (typeof TABS)[number]['id']
 
-type PageStatus = 'loading' | 'ready' | 'missing'
+type PageStatus = 'loading' | 'ready' | 'missing' | 'error'
 
 export default function ProjectPage() {
   const { projectId } = useParams()
@@ -75,30 +76,42 @@ export default function ProjectPage() {
   const requestedTab = searchParams.get('tab')
 
   const [status, setStatus] = useState<PageStatus>('loading')
+  const [loadError, setLoadError] = useState('')
+  const navigate = useNavigate()
   const [project, setProject] = useState<Project | null>(null)
   const [paper, setPaper] = useState<Paper | undefined>(undefined)
   const [activeTab, setActiveTab] = useState<TabId>(() => TABS.some((tab) => tab.id === requestedTab) ? requestedTab as TabId : 'breakdown')
   const [sourceRequest, setSourceRequest] = useState<{ page: number; quote?: string; nonce: number }>()
 
   const load = useCallback(async () => {
-    if (!Number.isInteger(numericId)) {
-      setStatus('missing')
-      return
+    setStatus('loading')
+    setLoadError('')
+    try {
+      if (!Number.isInteger(numericId)) {
+        setStatus('missing')
+        return
+      }
+      const projectRow = await db.projects.get(numericId)
+      if (!projectRow) {
+        setProject(null)
+        setPaper(undefined)
+        setStatus('missing')
+        return
+      }
+      const paperRows = await db.papers.where('projectId').equals(numericId).toArray()
+      paperRows.sort((a, b) => b.createdAt - a.createdAt)
+      setProject(projectRow)
+      setPaper(paperRows[0])
+      setStatus('ready')
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : '项目读取失败，请重试。')
+      setStatus('error')
     }
-    const projectRow = await db.projects.get(numericId)
-    if (!projectRow) {
-      setStatus('missing')
-      return
-    }
-    const paperRows = await db.papers.where('projectId').equals(numericId).toArray()
-    paperRows.sort((a, b) => b.createdAt - a.createdAt)
-    setProject(projectRow)
-    setPaper(paperRows[0])
-    setStatus('ready')
   }, [numericId])
 
   useEffect(() => {
-    void load()
+    const timer = window.setTimeout(() => void load(), 0)
+    return () => window.clearTimeout(timer)
   }, [load])
 
   function showSource(page: number, quote?: string) {
@@ -118,26 +131,21 @@ export default function ProjectPage() {
   }
 
   if (status === 'loading') {
-    return (
-      <div className="page-loading">
-        <span className="loading-dot" />
-        正在打开项目…
-      </div>
-    )
+    return <AsyncState status="loading" title="正在打开项目…" description="正在读取本机项目与论文资料。" />
+  }
+
+  if (status === 'error') {
+    return <AsyncState status="error" title="项目没有读取成功" description={loadError} action={{ label: '重新读取', onClick: () => void load() }} />
   }
 
   if (status === 'missing' || !project) {
     return (
-      <div className="empty-state standalone">
-        <div className="empty-glyph" aria-hidden="true">
-          寻
-        </div>
-        <h3>没有找到这个项目</h3>
-        <p>它可能已被删除，或者链接里的编号不正确。</p>
-        <Link className="btn btn-primary" to="/">
-          回到首页
-        </Link>
-      </div>
+      <AsyncState
+        status="empty"
+        title="没有找到这个项目"
+        description="它可能已被删除，或者链接里的编号不正确。"
+        action={{ label: '回到首页', onClick: () => navigate('/') }}
+      />
     )
   }
 

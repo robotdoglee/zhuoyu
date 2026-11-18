@@ -7,6 +7,9 @@ import { chunkPaperPages } from '../lib/chunks'
 import { ELEMENT_TYPE_META, extractHeuristically, type ElementDraft } from '../lib/elements'
 import { extractWithLlm } from '../lib/llm'
 import { loadLlmSettings } from '../lib/settings'
+import { usePagination } from '../lib/usePagination'
+import AsyncState from './AsyncState'
+import Pagination from './Pagination'
 
 type ExtractMode = 'llm' | 'heuristic'
 interface FailedRequest { types: ElementType[]; mode: ExtractMode }
@@ -21,6 +24,7 @@ export default function BreakdownPanel({ projectId, paper, onShowSource }: Break
   const [elements, setElements] = useState<Element[]>([])
   const [chunks, setChunks] = useState<TextChunk[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [busy, setBusy] = useState<'all' | ElementType | null>(null)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -32,6 +36,7 @@ export default function BreakdownPanel({ projectId, paper, onShowSource }: Break
 
   const load = useCallback(async () => {
     setLoading(true)
+    setLoadError('')
     try {
       const elementRows = await db.elements.where('projectId').equals(projectId).toArray()
       let chunkRows = paper?.id === undefined
@@ -44,14 +49,19 @@ export default function BreakdownPanel({ projectId, paper, onShowSource }: Break
       }
       setElements(elementRows.sort((a, b) => a.createdAt - b.createdAt))
       setChunks(chunkRows)
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : '拆解数据读取失败，请重试。')
     } finally {
       setLoading(false)
     }
   }, [paper, projectId])
 
   useEffect(() => {
-    void load()
+    const timer = window.setTimeout(() => void load(), 0)
+    return () => window.clearTimeout(timer)
   }, [load])
+
+  const pagination = usePagination(elements, projectId)
 
   async function regenerateChunks() {
     if (paper?.id === undefined || paper.pages.length === 0) return
@@ -209,59 +219,77 @@ export default function BreakdownPanel({ projectId, paper, onShowSource }: Break
       {notice && <div className="notice ok" role="status">{notice}</div>}
 
       {loading ? (
-        <div className="page-loading"><span className="loading-dot" />正在读取拆解项…</div>
+        <AsyncState status="loading" title="正在读取拆解项…" description="正在从本机整理九类事实与原文锚点。" />
+      ) : loadError ? (
+        <AsyncState status="error" title="拆解数据没有读取成功" description={loadError} action={{ label: '重新读取', onClick: () => void load() }} />
+      ) : elements.length === 0 ? (
+        <AsyncState
+          status="empty"
+          title="还没有论文拆解"
+          description="先手工记录一条可核对事实，或在 PDF 分块就绪后抽取九类要素。"
+          action={{ label: '手工新增第一条', onClick: () => setEditing('new') }}
+          secondaryAction={paper && chunks.length > 0 ? {
+            label: llmReady ? 'LLM 抽取九类' : '启发式抽取九类',
+            onClick: () => void runExtraction(ELEMENT_TYPE_META.map((item) => item.type), preferredMode),
+            disabled: busy !== null,
+          } : undefined}
+        />
       ) : (
-        <div className="element-grid">
-          {ELEMENT_TYPE_META.map((meta) => {
-            const items = elements.filter((item) => item.type === meta.type)
-            return (
-              <section className="element-group" key={meta.type}>
-                <header>
-                  <div>
-                    <h3>{meta.label}<span>{items.length}</span></h3>
-                    <p>{meta.hint}</p>
-                  </div>
-                  <button
-                    className="btn btn-quiet btn-sm"
-                    disabled={!paper || chunks.length === 0 || busy !== null}
-                    onClick={() => void runExtraction([meta.type], preferredMode)}
-                  >{busy === meta.type ? '抽取中…' : items.length ? '重抽本类' : '抽取本类'}</button>
-                </header>
-                <div className="element-items">
-                  {items.length === 0 ? (
-                    <div className="element-empty">暂无线索，可抽取本类或手工新增。</div>
-                  ) : items.map((item) => {
-                    const verified = verifyAnchor(paper?.pages ?? [], item.page, item.quote)
-                    return (
-                      <article className="element-item" key={item.id}>
-                        <div className="element-item-head">
-                          <strong>{item.label}</strong>
-                          <span className={`anchor-status ${verified ? 'verified' : 'unverified'}`}>
-                            {verified ? '✓ 已核实' : '待核实'}
-                          </span>
-                        </div>
-                        <p className="element-value">{item.value}</p>
-                        <blockquote>{item.quote || '未填写原文引文'}</blockquote>
-                        <footer>
-                          <button
-                            className="source-page-link"
-                            disabled={!paper?.pages.length || !item.page}
-                            onClick={() => item.page && onShowSource(item.page, item.quote)}
-                          >第 {item.page ?? '—'} 页 · 查看原文 ↗</button>
-                          <span className="element-source">{sourceLabel(item.source)}</span>
-                          <div>
-                            <button className="btn btn-quiet btn-sm" onClick={() => setEditing(item)}>编辑</button>
-                            <button className="btn btn-quiet btn-sm danger" onClick={() => void deleteElement(item)}>删除</button>
+        <>
+          <div className="element-grid">
+            {ELEMENT_TYPE_META.filter((meta) => !pagination.isPaginated || pagination.pageItems.some((item) => item.type === meta.type)).map((meta) => {
+              const items = elements.filter((item) => item.type === meta.type)
+              const visibleItems = pagination.pageItems.filter((item) => item.type === meta.type)
+              return (
+                <section className="element-group" key={meta.type}>
+                  <header>
+                    <div>
+                      <h3>{meta.label}<span>{items.length}</span></h3>
+                      <p>{meta.hint}</p>
+                    </div>
+                    <button
+                      className="btn btn-quiet btn-sm"
+                      disabled={!paper || chunks.length === 0 || busy !== null}
+                      onClick={() => void runExtraction([meta.type], preferredMode)}
+                    >{busy === meta.type ? '抽取中…' : items.length ? '重抽本类' : '抽取本类'}</button>
+                  </header>
+                  <div className="element-items">
+                    {visibleItems.length === 0 ? (
+                      <div className="element-empty">暂无线索，可抽取本类或手工新增。</div>
+                    ) : visibleItems.map((item) => {
+                      const verified = verifyAnchor(paper?.pages ?? [], item.page, item.quote)
+                      return (
+                        <article className="element-item" key={item.id}>
+                          <div className="element-item-head">
+                            <strong>{item.label}</strong>
+                            <span className={`anchor-status ${verified ? 'verified' : 'unverified'}`}>
+                              {verified ? '✓ 已核实' : '待核实'}
+                            </span>
                           </div>
-                        </footer>
-                      </article>
-                    )
-                  })}
-                </div>
-              </section>
-            )
-          })}
-        </div>
+                          <p className="element-value">{item.value}</p>
+                          <blockquote>{item.quote || '未填写原文引文'}</blockquote>
+                          <footer>
+                            <button
+                              className="source-page-link"
+                              disabled={!paper?.pages.length || !item.page}
+                              onClick={() => item.page && onShowSource(item.page, item.quote)}
+                            >第 {item.page ?? '—'} 页 · 查看原文 ↗</button>
+                            <span className="element-source">{sourceLabel(item.source)}</span>
+                            <div>
+                              <button className="btn btn-quiet btn-sm" onClick={() => setEditing(item)}>编辑</button>
+                              <button className="btn btn-quiet btn-sm danger" onClick={() => void deleteElement(item)}>删除</button>
+                            </div>
+                          </footer>
+                        </article>
+                      )
+                    })}
+                  </div>
+                </section>
+              )
+            })}
+          </div>
+          {pagination.isPaginated && <Pagination total={elements.length} page={pagination.page} pageCount={pagination.pageCount} onPageChange={pagination.setPage} label="拆解要素" />}
+        </>
       )}
 
       {editing && (

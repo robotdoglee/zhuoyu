@@ -2,7 +2,7 @@ import { db } from '../db/db'
 import type { Concept, ElementType, NoteEntry, PaperPage, ResourceLink } from '../db/types'
 import { verifyAnchor } from './anchors'
 import { buildRetrospectiveDraft } from './retrospective'
-import { loadProjectBundle } from './projectData'
+import { deleteProjectData, loadProjectBundle } from './projectData'
 
 const EXAMPLE_PROJECT_TITLE = 'Attention Is All You Need（L2 复现）'
 const ARXIV_URL = 'https://arxiv.org/abs/1706.03762'
@@ -481,11 +481,21 @@ const EXAMPLE_DEPENDENCIES: Record<string, string[]> = {
   BLEU: ['BPE 分词'],
 }
 
-export async function loadExampleProject(): Promise<{ projectId: number; existing: boolean }> {
-  return db.transaction('rw', [db.projects, db.papers, db.elements, db.concepts, db.planSteps, db.planVersions, db.notes, db.metrics, db.retrospectives], async () => {
-    const existing = (await db.projects.toArray()).find(
+export interface LoadExampleOptions {
+  reset?: boolean
+}
+
+export async function loadExampleProject(
+  options: LoadExampleOptions = {},
+): Promise<{ projectId: number; existing: boolean }> {
+  return db.transaction('rw', [db.projects, db.papers, db.chunks, db.elements, db.concepts, db.planSteps, db.planVersions, db.notes, db.metrics, db.retrospectives], async () => {
+    let existing = (await db.projects.toArray()).find(
       (project) => project.title === EXAMPLE_PROJECT_TITLE,
     )
+    if (existing?.id !== undefined && options.reset) {
+      await deleteProjectData(existing.id)
+      existing = undefined
+    }
     if (existing?.id !== undefined) {
       await ensureExampleM2Data(existing.id, Date.now())
       await ensureExampleM3Data(existing.id, Date.now())

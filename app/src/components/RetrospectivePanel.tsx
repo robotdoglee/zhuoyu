@@ -7,6 +7,7 @@ import { loadProjectBundle, type ProjectBundle } from '../lib/projectData'
 import { polishRetrospectiveWithLlm } from '../lib/retrospectiveLlm'
 import { loadLlmSettings } from '../lib/settings'
 import ExportPanel from './ExportPanel'
+import AsyncState from './AsyncState'
 
 export default function RetrospectivePanel({ projectId }: { projectId: number }) {
   const [bundle, setBundle] = useState<ProjectBundle>()
@@ -35,7 +36,10 @@ export default function RetrospectivePanel({ projectId }: { projectId: number })
     }
   }, [projectId])
 
-  useEffect(() => { void load() }, [load])
+  useEffect(() => {
+    const timer = window.setTimeout(() => void load(), 0)
+    return () => window.clearTimeout(timer)
+  }, [load])
 
   function update(field: RetroTextField, value: string) {
     setDraft((current) => ({ ...current, [field]: value }))
@@ -111,8 +115,8 @@ export default function RetrospectivePanel({ projectId }: { projectId: number })
     }
   }
 
-  if (loading) return <div className="page-loading"><span className="loading-dot" />正在汇总项目事实…</div>
-  if (!bundle) return <div className="notice error" role="alert">{error || '项目数据不可用。'}<button className="btn btn-ghost btn-sm" onClick={() => void load()}>重新读取</button></div>
+  if (loading) return <AsyncState status="loading" title="正在汇总项目事实…" description="拆解、计划、笔记与指标会在本机组合成复盘初稿。" />
+  if (!bundle) return <AsyncState status="error" title="复盘数据没有读取成功" description={error || '项目数据不可用。'} action={{ label: '重新读取', onClick: () => void load() }} />
 
   const hiddenCount = bundle.notes.filter((note) => note.isHiddenDetail).length
   return (
@@ -125,6 +129,16 @@ export default function RetrospectivePanel({ projectId }: { projectId: number })
       {!hasKey && <div className="notice warn"><span><b>当前使用本地模板拼装，无需 Key。</b> 初稿已自动生成；配置 OpenAI 兼容接口后，可主动点击「LLM 润色」。未点击前不会发送任何复盘内容。</span><Link className="btn btn-quiet btn-sm" to="/settings">LLM 设置 →</Link></div>}
       {notice && <div className="notice ok" role="status">{notice}</div>}
       {error && <div className="notice error" role="alert">{error}</div>}
+
+      {bundle.elements.length + bundle.planSteps.length + bundle.notes.length + bundle.metrics.length === 0 && (
+        <AsyncState
+          status="empty"
+          title="复盘正等待第一条实践证据"
+          description="可以先查看本地模板，再回到前面的标签页完成拆解、计划或记录。"
+          action={{ label: '汇总当前项目事实', onClick: regenerate }}
+          compact
+        />
+      )}
 
       <div className="retro-fact-strip" aria-label="复盘事实来源统计">
         <div><strong>{bundle.elements.length}</strong><span>论文拆解</span></div><div><strong>{bundle.planSteps.length}</strong><span>计划步骤</span></div><div><strong>{bundle.notes.length}</strong><span>过程记录</span></div><div><strong>{bundle.metrics.length}</strong><span>对照指标</span></div><div className="accent"><strong>{hiddenCount}</strong><span>论文没写的细节</span></div>

@@ -2,19 +2,31 @@ import { useCallback, useEffect, useState } from 'react'
 import { db } from '../db/db'
 import type { Metric } from '../db/types'
 import { compareMetric, formatMetricNumber, formatSigned } from '../lib/metrics'
+import AsyncState from './AsyncState'
 
 export default function MetricTable({ projectId }: { projectId: number }) {
   const [metrics, setMetrics] = useState<Metric[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [error, setError] = useState('')
 
   const load = useCallback(async () => {
-    const rows = await db.metrics.where('projectId').equals(projectId).toArray()
-    setMetrics(rows.sort((a, b) => a.createdAt - b.createdAt))
-    setLoading(false)
+    setLoading(true)
+    setLoadError('')
+    try {
+      const rows = await db.metrics.where('projectId').equals(projectId).toArray()
+      setMetrics(rows.sort((a, b) => a.createdAt - b.createdAt))
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : '指标读取失败，请重试。')
+    } finally {
+      setLoading(false)
+    }
   }, [projectId])
 
-  useEffect(() => { void load() }, [load])
+  useEffect(() => {
+    const timer = window.setTimeout(() => void load(), 0)
+    return () => window.clearTimeout(timer)
+  }, [load])
 
   async function addMetric() {
     const now = Date.now()
@@ -43,9 +55,13 @@ export default function MetricTable({ projectId }: { projectId: number }) {
         <div><p className="kicker">M2 / 指标对照</p><h2 id="metrics-title">我的结果，离原文有多远</h2><p>绝对差 = |我的 − 原文|；偏差保留方向。改善为绿色，5% 内退步为棕色，更大偏离为红色。</p></div>
         <button className="btn btn-ghost" onClick={() => void addMetric()}>＋ 录入指标</button>
       </div>
-      {error && <div className="notice error" role="alert">{error}</div>}
-      {loading ? <div className="page-loading"><span className="loading-dot" />正在读取指标…</div> : metrics.length === 0 ? (
-        <div className="metrics-empty"><span>还没有对照指标。录入论文数值与自己的实验值，偏差会实时计算并存入本机。</span><button className="btn btn-quiet btn-sm" onClick={() => void addMetric()}>添加第一行 →</button></div>
+      {error && <div className="notice error" role="alert"><span>{error}</span><button className="btn btn-ghost btn-sm" onClick={() => void load()}>重新读取</button></div>}
+      {loading ? (
+        <AsyncState status="loading" title="正在读取指标…" compact />
+      ) : loadError ? (
+        <AsyncState status="error" title="指标表没有读取成功" description={loadError} action={{ label: '重新读取', onClick: () => void load() }} compact />
+      ) : metrics.length === 0 ? (
+        <AsyncState status="empty" title="还没有对照指标" description="录入论文数值与自己的实验值，偏差会实时计算并存入本机。" action={{ label: '添加第一行', onClick: () => void addMetric() }} compact />
       ) : (
         <div className="metric-table-wrap">
           <table className="metric-table">

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { db } from '../db/db'
 import type { Paper, PaperSource } from '../db/types'
 import { formatAuthors, formatNumber } from '../lib/format'
@@ -80,7 +80,7 @@ export default function PaperSection({ projectId, paper, sourceRequest, onChange
         </div>
       )}
 
-      {paper && !showImporter && <PaperDetails key={paper.id} paper={paper} sourceRequest={sourceRequest} />}
+      {paper && !showImporter && <PaperDetails key={`${paper.id}-${sourceRequest?.nonce ?? 0}`} paper={paper} sourceRequest={sourceRequest} />}
 
       {showImporter && (
         <div className={paper ? 'importer-block' : ''}>
@@ -118,12 +118,9 @@ function PaperDetails({
   paper: Paper
   sourceRequest?: { page: number; quote?: string; nonce: number }
 }) {
-  const [page, setPage] = useState(paper.pages[0]?.page ?? 1)
-  useEffect(() => {
-    if (sourceRequest && paper.pages.some((entry) => entry.page === sourceRequest.page)) {
-      setPage(sourceRequest.page)
-    }
-  }, [paper.pages, sourceRequest])
+  const [page, setPage] = useState(() => sourceRequest && paper.pages.some((entry) => entry.page === sourceRequest.page)
+    ? sourceRequest.page
+    : paper.pages[0]?.page ?? 1)
   const selectedPage = paper.pages.find((entry) => entry.page === page) ?? paper.pages[0]
   const totalChars = paper.pages.reduce((sum, entry) => sum + entry.text.length, 0)
   const doiHref = paper.doi ? `https://doi.org/${paper.doi}` : undefined

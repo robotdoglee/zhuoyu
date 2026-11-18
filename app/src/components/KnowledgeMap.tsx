@@ -22,7 +22,9 @@ import '@xyflow/react/dist/style.css'
 import { db } from '../db/db'
 import type { Concept, Mastery } from '../db/types'
 import { buildLearningPath, findCycleMembers, wouldCreateCycle } from '../lib/graph'
-import ConceptDialog, { MASTERY_LABEL } from './ConceptDialog'
+import ConceptDialog from './ConceptDialog'
+import { MASTERY_LABEL } from '../lib/labels'
+import AsyncState from './AsyncState'
 
 type ConceptNodeData = {
   concept: Concept
@@ -78,6 +80,7 @@ export default function KnowledgeMap(props: KnowledgeMapProps) {
 function KnowledgeMapInner({ projectId }: KnowledgeMapProps) {
   const [concepts, setConcepts] = useState<Concept[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [nodes, setNodes] = useState<ConceptFlowNode[]>([])
   const [edges, setEdges] = useState<Edge[]>([])
   const [editing, setEditing] = useState<Concept | 'new' | null>(null)
@@ -94,12 +97,22 @@ function KnowledgeMapInner({ projectId }: KnowledgeMapProps) {
   const selectedEdges = useMemo(() => edges.filter((edge) => edge.selected), [edges])
 
   const load = useCallback(async () => {
-    const rows = await db.concepts.where('projectId').equals(projectId).toArray()
-    setConcepts(rows.sort((a, b) => a.createdAt - b.createdAt))
-    setLoading(false)
+    setLoading(true)
+    setLoadError('')
+    try {
+      const rows = await db.concepts.where('projectId').equals(projectId).toArray()
+      setConcepts(rows.sort((a, b) => a.createdAt - b.createdAt))
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : '知识框图读取失败，请重试。')
+    } finally {
+      setLoading(false)
+    }
   }, [projectId])
 
-  useEffect(() => { void load() }, [load])
+  useEffect(() => {
+    const timer = window.setTimeout(() => void load(), 0)
+    return () => window.clearTimeout(timer)
+  }, [load])
 
   const openConcept = useCallback((concept: Concept) => setEditing(concept), [])
   const changeMastery = useCallback(async (concept: Concept, mastery: Mastery) => {
@@ -126,27 +139,30 @@ function KnowledgeMapInner({ projectId }: KnowledgeMapProps) {
   }, [projectId])
 
   useEffect(() => {
-    const layout = computeLayout(concepts)
-    setNodes((current) => {
-      const previous = new Map(current.map((node) => [node.id, node]))
-      return concepts.flatMap((concept) => {
-        if (concept.id === undefined) return []
-        const id = String(concept.id)
-        const existing = previous.get(id)
-        return [{
-          ...existing,
-          id,
-          type: 'concept' as const,
-          position: existing?.position ?? concept.position ?? layout.get(id) ?? { x: 0, y: 0 },
-          deletable: false,
-          data: { concept, onOpen: openConcept, onMastery: changeMastery, onDelete: deleteConcept },
-        }]
+    const timer = window.setTimeout(() => {
+      const layout = computeLayout(concepts)
+      setNodes((current) => {
+        const previous = new Map(current.map((node) => [node.id, node]))
+        return concepts.flatMap((concept) => {
+          if (concept.id === undefined) return []
+          const id = String(concept.id)
+          const existing = previous.get(id)
+          return [{
+            ...existing,
+            id,
+            type: 'concept' as const,
+            position: existing?.position ?? concept.position ?? layout.get(id) ?? { x: 0, y: 0 },
+            deletable: false,
+            data: { concept, onOpen: openConcept, onMastery: changeMastery, onDelete: deleteConcept },
+          }]
+        })
       })
-    })
-    setEdges((current) => {
-      const selected = new Set(current.filter((edge) => edge.selected).map((edge) => edge.id))
-      return makeEdges(concepts).map((edge) => ({ ...edge, selected: selected.has(edge.id) }))
-    })
+      setEdges((current) => {
+        const selected = new Set(current.filter((edge) => edge.selected).map((edge) => edge.id))
+        return makeEdges(concepts).map((edge) => ({ ...edge, selected: selected.has(edge.id) }))
+      })
+    }, 0)
+    return () => window.clearTimeout(timer)
   }, [concepts, deleteConcept, openConcept, changeMastery])
 
   const learningPath = useMemo(() => buildLearningPath(concepts), [concepts])
@@ -257,13 +273,15 @@ function KnowledgeMapInner({ projectId }: KnowledgeMapProps) {
         </button>
       </div>
 
-      {error && <div className="notice error">{error}</div>}
+      {error && <div className="notice error" role="alert">{error}</div>}
       {cycleMembers.size > 0 && <div className="notice warn">检测到旧数据中有循环依赖，请删除相关边后再按学习路径复现。</div>}
 
       <div className="graph-layout">
         <section className="graph-canvas" aria-label="概念依赖有向无环图">
           {loading ? (
-            <div className="page-loading"><span className="loading-dot" />正在展开知识框图…</div>
+            <AsyncState status="loading" title="正在展开知识框图…" compact />
+          ) : loadError ? (
+            <AsyncState status="error" title="知识框图没有读取成功" description={loadError} action={{ label: '重新读取', onClick: () => void load() }} compact />
           ) : (
             <ReactFlow<ConceptFlowNode, Edge>
               nodes={nodes}
@@ -285,11 +303,15 @@ function KnowledgeMapInner({ projectId }: KnowledgeMapProps) {
               <MiniMap pannable zoomable nodeColor={(node) => (node.data as ConceptNodeData).concept.mastery === 'known' ? '#8aa17e' : '#d9c6b6'} />
             </ReactFlow>
           )}
-          {!loading && concepts.length === 0 && (
+          {!loading && !loadError && concepts.length === 0 && (
             <div className="graph-empty">
-              <span>图</span><h3>从第一个概念开始</h3>
-              <p>例如「自注意力」，再补充它的前置与后续。</p>
-              <button className="btn btn-primary" onClick={() => setEditing('new')}>新增概念</button>
+              <AsyncState
+                status="empty"
+                title="从第一个概念开始"
+                description="例如「自注意力」，再补充它的前置与后续；学习路径会随之生成。"
+                action={{ label: '新增概念', onClick: () => setEditing('new') }}
+                compact
+              />
             </div>
           )}
         </section>

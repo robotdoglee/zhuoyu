@@ -17,6 +17,37 @@ export interface PdfParseResult {
 /** M0 的保护阈值：避免超大 PDF 让浏览器长任务卡死 */
 const MAX_BYTES = 80 * 1024 * 1024
 const MAX_PAGES = 300
+const LARGE_PDF_THRESHOLD = 100
+const PDF_PAGE_BATCH_SIZE = 10
+
+export interface PdfPageBatch {
+  start: number
+  end: number
+}
+
+export function createPdfPageBatches(totalPages: number): PdfPageBatch[] {
+  if (!Number.isInteger(totalPages) || totalPages < 0) {
+    throw new RangeError('PDF 页数必须是非负整数。')
+  }
+  if (totalPages === 0) return []
+
+  const batchSize = totalPages > LARGE_PDF_THRESHOLD ? PDF_PAGE_BATCH_SIZE : totalPages
+  const batches: PdfPageBatch[] = []
+  for (let start = 1; start <= totalPages; start += batchSize) {
+    batches.push({ start, end: Math.min(start + batchSize - 1, totalPages) })
+  }
+  return batches
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw new DOMException('已取消 PDF 解析，未保存任何内容。', 'AbortError')
+  }
+}
+
+function yieldToMainThread(): Promise<void> {
+  return new Promise((resolve) => globalThis.setTimeout(resolve, 0))
+}
 
 let pdfjsPromise: Promise<typeof import('pdfjs-dist')> | null = null
 

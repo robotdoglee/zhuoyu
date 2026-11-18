@@ -1,53 +1,66 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import NewProjectDialog from '../components/NewProjectDialog'
+import AsyncState from '../components/AsyncState'
 import { db } from '../db/db'
 import { levelShort, type Paper, type Project } from '../db/types'
 import { formatDay } from '../lib/format'
 import { loadExampleProject } from '../lib/example'
+import { loadResnetExampleProject } from '../lib/resnetExample'
+
+type ExampleKind = 'attention' | 'resnet'
 
 export default function HomePage() {
   const [projects, setProjects] = useState<Project[]>([])
   const [papers, setPapers] = useState<Paper[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [exampleLoading, setExampleLoading] = useState(false)
+  const [exampleBusy, setExampleBusy] = useState<ExampleKind | null>(null)
   const [exampleError, setExampleError] = useState('')
+  const [failedExample, setFailedExample] = useState<{ kind: ExampleKind; reset: boolean } | null>(null)
   const navigate = useNavigate()
 
-  async function openExample() {
-    setExampleLoading(true)
+  async function openExample(kind: ExampleKind, reset = false) {
+    if (reset && !window.confirm(`确定重置${kind === 'attention' ? ' Attention ' : ' ResNet '}示例吗？该示例中的修改会被内置数据替换，其他项目不受影响。`)) {
+      return
+    }
+    setExampleBusy(kind)
     setExampleError('')
+    setFailedExample(null)
     try {
-      const { projectId } = await loadExampleProject()
+      const loader = kind === 'attention' ? loadExampleProject : loadResnetExampleProject
+      const { projectId } = await loader({ reset })
       navigate(`/project/${projectId}`)
     } catch (error) {
       setExampleError(error instanceof Error ? error.message : '示例载入失败，请重试。')
+      setFailedExample({ kind, reset })
     } finally {
-      setExampleLoading(false)
+      setExampleBusy(null)
     }
   }
 
-  useEffect(() => {
-    let active = true
-    async function load() {
-      try {
-        const [projectRows, paperRows] = await Promise.all([
-          db.projects.orderBy('updatedAt').reverse().toArray(),
-          db.papers.orderBy('createdAt').reverse().toArray(),
-        ])
-        if (!active) return
-        setProjects(projectRows)
-        setPapers(paperRows)
-      } finally {
-        if (active) setLoading(false)
-      }
-    }
-    void load()
-    return () => {
-      active = false
+  const load = useCallback(async () => {
+    setLoading(true)
+    setLoadError('')
+    try {
+      const [projectRows, paperRows] = await Promise.all([
+        db.projects.orderBy('updatedAt').reverse().toArray(),
+        db.papers.orderBy('createdAt').reverse().toArray(),
+      ])
+      setProjects(projectRows)
+      setPapers(paperRows)
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : '项目读取失败，请重试。')
+    } finally {
+      setLoading(false)
     }
   }, [])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => void load(), 0)
+    return () => window.clearTimeout(timer)
+  }, [load])
 
   const paperByProject = useMemo(() => {
     const map = new Map<number, Paper>()
@@ -75,12 +88,9 @@ export default function HomePage() {
             <button className="btn btn-primary" onClick={() => setDialogOpen(true)}>
               新建复现项目
             </button>
-            <button className="btn btn-ghost" disabled={exampleLoading} onClick={() => void openExample()}>
-              {exampleLoading ? '正在雕琢示例…' : '载入 Attention 示例'}
-            </button>
+            <a className="btn btn-ghost" href="#examples">一键载入示例</a>
             <a className="btn btn-quiet" href="#projects">浏览项目</a>
           </div>
-          {exampleError && <div className="notice error">{exampleError}</div>}
         </div>
 
         <aside className="hero-card" aria-label="琢玉简介">
@@ -102,6 +112,66 @@ export default function HomePage() {
         </aside>
       </section>
 
+      <section id="examples" className="examples-section" aria-labelledby="examples-title">
+        <div className="section-title-row">
+          <div>
+            <p className="kicker">离线示例</p>
+            <h2 id="examples-title">从一份完整复现档案开始</h2>
+          </div>
+          <span className="section-sub">内置数据 · 不联网 · 随时重置</span>
+        </div>
+        {exampleError && (
+          <div className="notice error" role="alert">
+            <span>{exampleError}</span>
+            {failedExample && (
+              <button className="btn btn-ghost btn-sm" onClick={() => void openExample(failedExample.kind, failedExample.reset)}>
+                重试
+              </button>
+            )}
+          </div>
+        )}
+        <div className="example-grid">
+          <article className="example-card">
+            <div className="example-card-top">
+              <span className="chip chip-L2">L2 · 复现主表结果</span>
+              <span className="project-date">NeurIPS 2017</span>
+            </div>
+            <h3>Attention Is All You Need</h3>
+            <p>从 WMT14 英德翻译拆解 Transformer，练习多头注意力、位置编码、训练计划与 BLEU 偏差归因。</p>
+            <ul className="example-contents" aria-label="Attention 示例内容">
+              <li>11 页关键文本与九类拆解</li><li>知识 DAG、6 步计划、5 条笔记</li><li>指标对照与复盘初稿</li>
+            </ul>
+            <div className="example-actions">
+              <button className="btn btn-primary" disabled={exampleBusy !== null} onClick={() => void openExample('attention')}>
+                {exampleBusy === 'attention' ? '正在载入…' : '载入 Attention 示例'}
+              </button>
+              <button className="btn btn-quiet" disabled={exampleBusy !== null} onClick={() => void openExample('attention', true)}>
+                重置示例
+              </button>
+            </div>
+          </article>
+          <article className="example-card">
+            <div className="example-card-top">
+              <span className="chip chip-L2">L1 + L2 · 从跑通到主表</span>
+              <span className="project-date">CVPR 2016</span>
+            </div>
+            <h3>ResNet on CIFAR-10</h3>
+            <p>围绕 Deep Residual Learning 复现 ResNet-20/56/110，核对恒等 shortcut、64k 迭代计划与测试错误率。</p>
+            <ul className="example-contents" aria-label="ResNet 示例内容">
+              <li>论文元数据、12 页关键文本与九类拆解</li><li>知识 DAG、L1/L2 共 9 步、6 条笔记</li><li>4 项指标与完整复盘</li>
+            </ul>
+            <div className="example-actions">
+              <button className="btn btn-primary" disabled={exampleBusy !== null} onClick={() => void openExample('resnet')}>
+                {exampleBusy === 'resnet' ? '正在载入…' : '载入 ResNet 示例'}
+              </button>
+              <button className="btn btn-quiet" disabled={exampleBusy !== null} onClick={() => void openExample('resnet', true)}>
+                重置示例
+              </button>
+            </div>
+          </article>
+        </div>
+      </section>
+
       <section id="projects" className="projects-section">
         <div className="section-title-row">
           <div>
@@ -114,27 +184,16 @@ export default function HomePage() {
         </div>
 
         {loading ? (
-          <div className="project-grid" aria-busy="true">
-            {[0, 1, 2].map((index) => (
-              <div key={index} className="project-card skeleton-card">
-                <span className="skeleton-line short" />
-                <span className="skeleton-line title" />
-                <span className="skeleton-line" />
-                <span className="skeleton-line" />
-              </div>
-            ))}
-          </div>
+          <AsyncState status="loading" title="正在读取本机项目…" description="论文与复现数据只保存在当前浏览器。" />
+        ) : loadError ? (
+          <AsyncState status="error" title="项目列表没有读取成功" description={loadError} action={{ label: '重新读取', onClick: () => void load() }} />
         ) : projects.length === 0 ? (
-          <div className="empty-state">
-            <div className="empty-glyph" aria-hidden="true">
-              玉
-            </div>
-            <h3>还没有项目</h3>
-            <p>从一篇你想吃透的论文开始。先写下复现目标，其余慢慢雕。</p>
-            <button className="btn btn-primary" onClick={() => setDialogOpen(true)}>
-              新建第一个项目
-            </button>
-          </div>
+          <AsyncState
+            status="empty"
+            title="还没有项目"
+            description="从一篇你想吃透的论文开始，或先载入上方完整示例。"
+            action={{ label: '新建第一个项目', onClick: () => setDialogOpen(true) }}
+          />
         ) : (
           <div className="project-grid">
             {projects.map((project) => {
