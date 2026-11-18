@@ -31,3 +31,4 @@
 | 27 | 2026-11-19 05:41 | M3 导出面板：Markdown / Obsidian 笔记包 / JSON / Anki CSV / PDF 报告，仅本地生成；TRAE 继续做真实下载核对 | 待查 | screenshots/2026-11-19_0541_27-m3-export-panel.png |
 | 28 | 2026-11-19 05:57 | M3 浏览器验收：项目页、PDF 10 页 A4 + Mermaid 渲染、技能树同名去重 | 待查 | screenshots/2026-11-19_0557_28-m3-project-page.png |
 | 29 | 2026-11-19 06:26 | M3 完成：复盘关键事实与指标表一致（BLEU 偏差 −1.47% / −1.06%）；五种导出真实下载检查（Obsidian 40 篇/151 双链/缺失 0；JSON schema v4 不含 Key；Anki UTF-8 BOM 10 张；PDF 10 页）；同名 Softmax 只计一次、保留两个来源；Console 0 error；lint 0 error（11 个 React 类警告待修） | 待查 | screenshots/2026-11-19_0626_29-m3-complete.png |
+| 30 | 2026-11-19 06:29 | M4 打磨与示例 prompt 发送（prompts/08-m4-polish.md；不含部署） | 待查 | screenshots/2026-11-19_0629_30-m4-prompt-sent.png |
