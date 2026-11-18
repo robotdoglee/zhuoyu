@@ -39,7 +39,7 @@ export default function BreakdownPanel({ projectId, paper, onShowSource }: Break
         : await db.chunks.where('paperId').equals(paper.id).toArray()
       if (paper?.id !== undefined && paper.pages.length > 0 && chunkRows.length === 0) {
         const generated = chunkPaperPages(paper.pages, projectId, paper.id)
-        await db.chunks.bulkAdd(generated)
+        await db.chunks.bulkPut(generated)
         chunkRows = generated
       }
       setElements(elementRows.sort((a, b) => a.createdAt - b.createdAt))
