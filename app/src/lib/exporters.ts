@@ -106,9 +106,7 @@ export function buildMarkdown(bundle: ProjectBundle): string {
     '',
     '> 以下高亮内容来自记事本中显式标记的记录，是复现过程中独立沉淀的经验。',
     '',
-    buildHiddenDetailsMarkdown(bundle),
-    '',
-    '### 专栏补写', '', retro.hiddenDetails || '待补写。',
+    retro.hiddenDetails || buildHiddenDetailsMarkdown(bundle),
     '',
     '## 九、与作者沟通', '', retro.authorContact || '待补写。',
     '',
@@ -244,7 +242,9 @@ const RETRO_OBSIDIAN_FIELDS = [
 function obsidianNoteContent(note: NoteEntry, projectName: string, conceptNames: Map<number, string>, bundle: ProjectBundle): string {
   const content = note.conceptIds.reduce((text, id) => {
     const name = conceptNames.get(id)
-    return name ? text.replaceAll(`](#concept-${id})`, `]([[${name}]])`) : text
+    return name
+      ? text.replace(new RegExp(`\\[[^\\]\\n]*\\]\\(#concept-${id}\\)`, 'g'), `[[${name}]]`)
+      : text
   }, note.content)
   const step = bundle.planSteps.find((item) => item.id === note.stepId)
   return [`# ${NOTE_KIND_LABEL[note.kind]}记录 #${note.id ?? ''}`, '', `所属项目：[[${projectName}]]`, '', `时间：${new Date(note.createdAt).toLocaleString('zh-CN')}`, '', `关联步骤：${step?.title ?? '无'}`, '', note.isHiddenDetail ? '> 论文没写的细节' : '', '', content || '（本地截图记录，图片请从 JSON 导出提取）', ''].join('\n')

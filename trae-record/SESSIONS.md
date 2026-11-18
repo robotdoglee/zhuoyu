@@ -27,3 +27,5 @@
 | 23 | 2026-11-19 04:26 | M2：补齐记事本面板 NotebookPanel、计划↔记事本联动；build 通过、lint 0；浏览器验收中（复现计划页 L2、一键重新规划 v2、Console 0） | 待查 | screenshots/2026-11-19_0426_23-m2-plan-ui-acceptance.png |
 | 24 | 2026-11-19 05:01 | M2 完成：L1/L2/L3 计划差异、刷新持久化、指标偏差（24 vs 27.3 → -12.09%，方向变色）、无 key 报错助手零请求、重排 v2 + v1 快照；build 通过，Vitest 16/16，Console 无错误/警告，README 更新 | 待查 | screenshots/2026-11-19_0501_24-m2-complete.png |
 | 25 | 2026-11-19 05:03 | M3 开始：新任务“实现琢玉 M3 复盘与导出”，提示词 prompts/07-m3-retro-export-skilltree.md | 待查 | screenshots/2026-11-19_0503_25-m3-prompt-sent.png |
+| 26 | 2026-11-19 05:39 | M3 导出验收时内置浏览器弹出系统“另存为”对话框阻塞（另有 ~/.config 写权限提示）；人工把两份导出存到临时目录后对话框清空 | 待查 | screenshots/2026-11-19_0539_26-m3-export-save-dialog.png |
+| 27 | 2026-11-19 05:41 | M3 导出面板：Markdown / Obsidian 笔记包 / JSON / Anki CSV / PDF 报告，仅本地生成；TRAE 继续做真实下载核对 | 待查 | screenshots/2026-11-19_0541_27-m3-export-panel.png |
