@@ -25,3 +25,4 @@
 | 21 | 2026-11-19 04:04 | 运行环境重启，TRAE 进程丢失；M2 进行中任务报 Model Request failed (3003)。已提交 WIP 快照 fb695e2，重装并重启 TRAE | 待查 | screenshots/2026-11-19_0405_21-sandbox-restart-3003.png |
 | 22 | 2026-11-19 04:08 | M2 续接提示词 prompts/06-m2-continue.md，同一任务继续 | 待查 | screenshots/2026-11-19_0408_22-m2-continue.png |
 | 23 | 2026-11-19 04:26 | M2：补齐记事本面板 NotebookPanel、计划↔记事本联动；build 通过、lint 0；浏览器验收中（复现计划页 L2、一键重新规划 v2、Console 0） | 待查 | screenshots/2026-11-19_0426_23-m2-plan-ui-acceptance.png |
+| 24 | 2026-11-19 05:01 | M2 完成：L1/L2/L3 计划差异、刷新持久化、指标偏差（24 vs 27.3 → -12.09%，方向变色）、无 key 报错助手零请求、重排 v2 + v1 快照；build 通过，Vitest 16/16，Console 无错误/警告，README 更新 | 待查 | screenshots/2026-11-19_0501_24-m2-complete.png |
