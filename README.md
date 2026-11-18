@@ -5,14 +5,14 @@
 
 琢玉是一个**本地优先**的论文复现工作台：导入一篇论文，拆解方法、补齐背景、排好计划、记录实验、完成复盘。没有后端，所有业务数据都存在浏览器 IndexedDB 里。
 
-当前进度：**M2 复现计划 + 记事本 + 指标对照**。M0 项目骨架、M1 论文拆解与知识框图、M2 计划与实验记录均已可用，复盘仍按里程碑占位。路线图与验收标准见 [PLAN.md](./PLAN.md)，产品设计见 [DESIGN.md](./DESIGN.md)。
+当前进度：**M3 复盘 + 五种本地导出 + 跨项目技能树**。M0 项目骨架、M1 论文拆解与知识框图、M2 计划与实验记录、M3 复盘与成长沉淀均已可用。路线图与验收标准见 [PLAN.md](./PLAN.md)，产品设计见 [DESIGN.md](./DESIGN.md)。
 
 ---
 
 ## 已实现（M0）
 
 - **项目**：首页项目列表、新建复现项目（名称、复现目标、L1/L2/L3 级别、设备与算力），刷新后数据仍在。
-- **项目详情**：项目概览、论文区与五个工作标签；论文拆解、知识框图、复现计划和记事本已可用，复盘按计划占位。
+- **项目详情**：项目概览、论文区与五个工作标签；论文拆解、知识框图、复现计划、记事本和复盘均已可用。
 - **论文导入**
   - 上传 PDF：pdf.js 在浏览器内逐页提取文本，显示解析进度，页数、分页文本与文件名存库；可预览每一页。
   - 元数据检索：输入 arXiv ID / arXiv URL 走 arXiv API；输入 DOI 走 OpenAlex。取回标题、作者、摘要、年份、arXiv ID、DOI 等。
@@ -38,7 +38,16 @@
 - **记事本与计划联动**：按步骤记录命令、代码、结果、报错、想法和截图；支持 Markdown/GFM、@卡片、@步骤及本地截图。保存记录可勾掉检查点并完成步骤，笔记与计划回写在同一事务中提交。
 - **指标对照**：录入原文值与实验值，实时计算绝对差和偏差百分比；越高越好/越低越好可配置，结果使用设计规范中的 `--ok` / `--warn` / `--err` 色彩。
 - **报错助手**：粘贴日志后提取摘要、关键报错和排查建议，成功时自动写入记事本；未配置 Key 时明确不可用且不发送日志。
-- **M2 示例数据**：Attention 示例额外包含 6 步 L2 计划、3 条记录和 2 个 BLEU 指标；已有 M1 示例会幂等补齐，不覆盖用户修改。
+- **M2 示例数据**：Attention 示例额外包含 6 步 L2 计划、过程记录和 2 个 BLEU 指标；已有 M1 示例会幂等补齐，不覆盖用户修改。
+
+## 已实现（M3）
+
+- **结构化复盘**：参照 ML Reproducibility Challenge，提供范围、方法、结果、偏差归因总述、数据/超参/随机种子/硬件四类归因、难点与易点、论文没写的细节、与作者沟通等可编辑字段。
+- **本地自动汇总**：从项目、论文、拆解、计划、记事本和指标表生成初稿；指标差值与偏差百分比复用指标表的同一计算函数，没有证据的归因保留「待补写」。无 Key 时使用本地模板；配置 Key 后也只有主动点击「LLM 润色」才发送当前复盘文字。
+- **论文没写的细节**：记录可标记为隐藏超参、预处理、数据、评估、环境或其他细节，支持修改分类和取消标记；独立专栏与原记录互链，并在复盘中高亮汇总。
+- **五种本地导出**：Markdown 含完整复盘、页码、引文与 Mermaid 源码；Obsidian ZIP 为项目、复盘、概念、计划和记录生成真实笔记与有效双链；JSON 保存完整结构化项目数据；Anki CSV 含 UTF-8 BOM、概念正反面和掌握度标签；PDF 报告含中文复盘、指标、引文及渲染后的 Mermaid 知识框图。
+- **跨项目技能树**：只累计已掌握概念，同名概念经空白与大小写归一化后只计一次；保留全部来源项目、来源概念和首次掌握时间，以知识图谱和成长时间线展示，并可回溯到原项目。
+- **M3 示例数据**：Attention 示例现含一份完整复盘初稿、5 条过程记录及 Adam β₂、句对过滤与长度组批 2 条隐藏细节；补充过程幂等执行，不覆盖用户已有复盘。
 
 ## 快速开始
 
@@ -47,10 +56,11 @@
 ```bash
 cd app
 npm install
-npm run dev      # 开发预览，默认 http://localhost:5173
-npm test         # Vitest：分块、引文校验、拓扑与循环检测
-npm run build    # 类型检查 + 生产构建，输出 app/dist
-npm run preview  # 预览生产构建
+npm run dev                  # 开发预览，默认 http://localhost:5173
+npm test -- --pool=threads   # Vitest：8 个测试文件、26 条用例
+npm run build                # 类型检查 + 生产构建，输出 app/dist
+npm run lint                 # oxlint 静态检查
+npm run preview              # 预览生产构建
 ```
 
 ## 目录结构
@@ -73,19 +83,22 @@ zhuoyu/
 │       ├── pages/
 │       │   ├── HomePage.tsx       # 首页：项目列表、新建项目、载入示例
 │       │   ├── ProjectPage.tsx    # 项目详情与五个工作标签
+│       │   ├── SkillsPage.tsx     # 跨项目技能图谱、来源与成长时间线
 │       │   └── SettingsPage.tsx   # OpenAI 兼容接口设置与一键清除
 │       ├── components/
 │       │   ├── BreakdownPanel.tsx # 分块、九类拆解、抽取与引文校验
 │       │   ├── KnowledgeMap.tsx   # 概念 DAG、依赖编辑与学习路径
 │       │   ├── PlanPanel.tsx      # 三级计划、编辑排序与历史版本
-│       │   ├── NotebookPanel.tsx  # Markdown 记录、@引用、联动与报错助手
+│       │   ├── NotebookPanel.tsx  # Markdown 记录、@引用、隐藏细节与报错助手
 │       │   ├── MetricTable.tsx    # 指标偏差与方向颜色
+│       │   ├── RetrospectivePanel.tsx # 复盘汇总、补写、润色与保存
+│       │   ├── ExportPanel.tsx    # 五种本地导出入口
 │       │   ├── ConceptDialog.tsx  # 概念卡与分层资源编辑/检索
 │       │   ├── PaperSection.tsx   # 论文信息与分页原文预览
 │       │   └── PaperImporter.tsx  # 上传 PDF / arXiv·DOI 检索
 │       ├── db/
 │       │   ├── types.ts       # 项目、计划、笔记、指标等数据模型
-│       │   └── db.ts          # Dexie 数据库（zhuoyu, version 3）
+│       │   └── db.ts          # Dexie 数据库（zhuoyu, version 4）与增量迁移
 │       └── lib/
 │           ├── chunks.ts      # 页内偏移分块
 │           ├── elements.ts    # 九类定义与无 Key 启发式抽取
@@ -94,17 +107,23 @@ zhuoyu/
 │           ├── planLlm.ts     # LLM 计划生成与结构化校验
 │           ├── metrics.ts     # 指标差值、偏差与方向判定
 │           ├── errorAssistant.ts # 日志诊断与记事本 Markdown
+│           ├── projectData.ts # 复盘与导出共用的项目事实聚合
+│           ├── retrospective.ts # 本地复盘模板与指标事实汇总
+│           ├── retrospectiveLlm.ts # 用户主动触发的复盘润色
+│           ├── exporters.ts   # Markdown / Obsidian / JSON / Anki CSV
+│           ├── pdfExport.ts   # 中文 PDF 与 Mermaid 框图渲染
+│           ├── skills.ts      # 跨项目概念去重、来源与成长聚合
 │           ├── anchors.ts     # 引文归一化与页内匹配
 │           ├── graph.ts       # 学习路径与循环检测
 │           ├── resources.ts   # 公开资源检索与分层
-│           ├── example.ts     # Attention 内置示例
-│           └── *.test.ts      # 关键纯函数单元测试
+│           ├── example.ts     # Attention 内置示例与 M3 复盘数据
+│           └── *.test.ts      # 关键纯函数与导出单元测试
 └── trae-record/               # TRAE 会话截图与使用记录（私有）
 ```
 
 ## 数据与隐私
 
-- 数据库名：`zhuoyu`（IndexedDB），当前 schema 版本 `3`；v2 → v3 迁移会保留旧步骤与笔记，并补齐里程碑、版本、引用和联动字段的默认值。
+- 数据库名：`zhuoyu`（IndexedDB），当前 schema 版本 `4`。v2 → v3 保留旧步骤与笔记并补齐计划字段；v3 → v4 只增量补字段：普通记录默认 `isHiddenDetail: false`，已有隐藏记录补默认分类，已掌握概念补掌握时间，旧复盘保留 `deviations` 等原文并补齐 M3 新字段，不清空或重写旧业务内容。
 - 十张表及其主要字段：
 
 | 表 | 内容 |
@@ -113,16 +132,17 @@ zhuoyu/
 | `papers` | 论文元数据、来源、页数、分页文本、arXiv ID、DOI |
 | `chunks` | 稳定分块 ID、论文与页码、页内起止偏移、文本 |
 | `elements` | 拆解项：九类类型、内容、原文引文、页码、来源、校验状态 |
-| `concepts` | 概念卡：解释、为何需要、难度、掌握度、依赖、画布位置、分层资源 |
+| `concepts` | 概念卡：解释、为何需要、难度、掌握度、最近掌握时间、依赖、画布位置、分层资源 |
 | `planSteps` | 计划步骤：里程碑、版本、顺序、估时、状态、检查点、关联概念 |
 | `planVersions` | 重新规划前的完整只读计划快照与原因 |
-| `notes` | 六类 Markdown 记录、卡片/步骤引用、联动动作、本地截图与来源 |
+| `notes` | 六类 Markdown 记录、卡片/步骤引用、联动动作、本地截图、隐藏细节标记与分类、来源 |
 | `metrics` | 指标：自己的值、论文值、单位、越高越好或越低越好 |
-| `retrospectives` | 复盘：范围、方法、结果、偏差归因、隐藏细节、沟通记录 |
+| `retrospectives` | 复盘：范围、方法、结果、偏差总述、数据/超参/种子/硬件归因、难易点、隐藏细节、沟通记录 |
 
 - PDF 文本只在浏览器内解析，业务数据默认不离开本机；截图以 Data URL 存 IndexedDB，单张限制 3 MB，外部 Markdown 图片不会加载。
-- 外部请求仅由论文元数据检索（arXiv / OpenAlex）、公开资源检索（Wikipedia / arXiv / GitHub）或用户主动触发 LLM 拆解、计划生成、报错诊断产生；公开资源检索只发送关键词，LLM 请求只向用户配置的端点发送当前任务所需上下文或日志。
-- 未配置 Key 时，计划使用本地模板，报错助手在构造请求前停止，日志不会发送；LLM 地址、模型名与 API Key 保存在本机 `localStorage`，可在设置页一键清除，不写入项目数据库。
+- 五种导出全部在本机生成与下载，不上传项目内容。Obsidian ZIP、JSON、Anki CSV 直接本地序列化；PDF 使用本地打包的 Mermaid、html2canvas 与 jsPDF 渲染。JSON 包含项目事实与本地截图，不包含 LLM API Key。
+- 外部请求仅由论文元数据检索（arXiv / OpenAlex）、公开资源检索（Wikipedia / arXiv / GitHub）或用户主动触发 LLM 拆解、计划生成、报错诊断、复盘润色产生；公开资源检索只发送关键词，LLM 请求只向用户配置的端点发送当前任务所需上下文、日志或复盘文字。
+- 未配置 Key 时，计划与复盘使用本地模板，报错助手在构造请求前停止，日志不会发送；LLM 地址、模型名与 API Key 保存在本机 `localStorage`，可在设置页一键清除，不写入项目数据库或导出文件。
 - 修改表结构时必须递增 Dexie 版本并补充迁移，避免清空用户数据。
 
 ## 论文导入说明
@@ -148,14 +168,30 @@ zhuoyu/
 - 记事本编辑器可插入 @卡片与 @步骤，切换「预览 Markdown」检查排版；保存时勾选「勾掉检查点」「完成步骤」即可回写计划。
 - 指标方向会同时改变偏差解释和好坏颜色；报错助手只有在配置 Key 且主动点击后才会发送日志。
 
+## M3 使用提示
+
+- 在项目「复盘」标签中检查自动初稿、逐项补写并保存；「重新汇总」会按当前项目事实覆盖输入框，已有补写请先导出备份。配置 Key 后，「LLM 润色」结果也只填入编辑器，核对并保存后才覆盖已存版本。
+- 在记事本新增或编辑记录时勾选「论文没写的细节」并选择分类；专栏中的「查看原记录」可回到正文，「移出细节专栏」只取消标记，不删除原记录。
+- 复盘页底部可分别下载 Markdown、Obsidian ZIP、JSON、Anki CSV 和 PDF；导出前会自动保存当前复盘。Obsidian 请解压后作为笔记目录打开，Anki 导入时按逗号分隔并保留首行字段名。
+- 顶栏「技能树」展示所有项目中已掌握的概念。点击概念可查看首次掌握时间与来源项目，来源链接会回到对应项目的知识框图。
+
 ## M2 验收
 
 - `npm run build` 通过；Vitest 共 6 个测试文件、16 条用例全部通过。
 - 已在浏览器逐项走通 [PLAN.md](./PLAN.md) 4.2 的五条标准，包括 L1/L2/L3 模板、刷新持久化、版本快照、记事本联动、指标方向和无 Key 隐私检查；Console 无错误或警告。
 
+## M3 验收
+
+- `npm run build` 通过；`npm test -- --pool=threads` 共 8 个测试文件、26 条用例全部通过；`npm run lint` 为 0 error、11 个 React 类警告。构建有大 chunk 与第三方 `use no memo` 提示，未作为零警告声明。
+- 已按 [PLAN.md](./PLAN.md) 5.2 验收：复盘关键事实与两项 BLEU 指标一致（-1.47% / -1.06%）；五种格式均通过真实浏览器下载并检查文件内容；跨项目同名 `Softmax` 只累计一次、保留两个来源且可分别回溯；Markdown 的 16 条拆解均含页码与引文。
+- 示例导出内容检查：Obsidian ZIP 含 40 篇真实笔记和 151 个双链，缺失目标与旧链接残留均为 0；JSON 为 schema v4 且不含 `apiKey`；Anki CSV 含 BOM、10 张三列卡片；PDF 为 10 页 A4，中文与 Mermaid 框图渲染正常。
+- M0～M2 主路径、隐藏细节新增/取消、计划检查点与刷新持久化均通过；首页和六个工作页面在 375px 下无文档级横向溢出，宽指标表仅在自身容器内滚动。
+- 使用真实 v3 IndexedDB 数据完成 v3 → v4 迁移验收：旧项目、概念、计划、记录、指标和复盘内容保留，新字段默认值正确，迁移后页面可正常渲染。
+- 上述浏览器验收中 Console error、Page Error 和非本机业务请求均为 0。
+
 ## 技术栈
 
-React 19 · TypeScript · Vite 8 · React Router 7 · Dexie 4（IndexedDB）· pdf.js 6 · React Flow 13 · dagre · React Markdown · remark GFM · Zod 4 · Vitest · 霞鹜文楷 Screen（npm webfont）。
+React 19 · TypeScript · Vite 8 · React Router 7 · Dexie 4（IndexedDB）· pdf.js 6 · React Flow 13 · dagre · React Markdown · remark GFM · Zod 4 · JSZip · Mermaid · html2canvas · jsPDF · Vitest · 霞鹜文楷 Screen（npm webfont）。
 
 ## 部署
 

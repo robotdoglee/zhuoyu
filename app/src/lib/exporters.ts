@@ -189,6 +189,10 @@ export function buildObsidianNotes(bundle: ProjectBundle): ObsidianNote[] {
   bundle.concepts.forEach((concept, index) => {
     if (concept.id !== undefined) conceptNames.set(concept.id, `概念-${String(index + 1).padStart(2, '0')}-${safeFileName(concept.name)}`)
   })
+  const stepNames = new Map<number, string>()
+  bundle.planSteps.forEach((step, index) => {
+    if (step.id !== undefined) stepNames.set(step.id, `计划-${String(index + 1).padStart(2, '0')}-${safeFileName(step.title)}`)
+  })
   const noteNames = new Map<number, string>()
   bundle.notes.forEach((note, index) => {
     if (note.id !== undefined) noteNames.set(note.id, `记录-${String(index + 1).padStart(3, '0')}-${safeFileName(NOTE_KIND_LABEL[note.kind])}`)
@@ -200,6 +204,7 @@ export function buildObsidianNotes(bundle: ProjectBundle): ObsidianNote[] {
       `复现目标：${bundle.project.goal}`, '',
       `- [[${retroName}]]`, paperName ? `- [[${paperName}]]` : '- 尚未导入论文', '',
       '## 论文拆解', '', ...(elementNames.size ? [...elementNames.values()].map((name) => `- [[${name}]]`) : ['- 暂无']), '',
+      '## 复现计划', '', ...(stepNames.size ? [...stepNames.values()].map((name) => `- [[${name}]]`) : ['- 暂无']), '',
       '## 概念卡片', '', ...(conceptNames.size ? [...conceptNames.values()].map((name) => `- [[${name}]]`) : ['- 暂无']), '',
       '## 记事本', '', ...(noteNames.size ? [...noteNames.values()].map((name) => `- [[${name}]]`) : ['- 暂无']), '',
       '## Mermaid 知识框图', '', '```mermaid', buildMermaid(bundle.concepts), '```', '',
@@ -209,10 +214,45 @@ export function buildObsidianNotes(bundle: ProjectBundle): ObsidianNote[] {
     fileName: `${paperName}.md`,
     content: [`# ${bundle.paper.title}`, '', `所属项目：[[${projectName}]]`, '', `作者：${bundle.paper.authors.join('、')}`, '', `摘要：${bundle.paper.abstract ?? '暂无'}`, '', bundle.paper.url ?? ''].join('\n'),
   })
+  const retroText = retrospectiveText(bundle.retrospective)
+  const hiddenNotes = bundle.notes.filter((note) => note.isHiddenDetail)
   notes.push({
     fileName: `${retroName}.md`,
-    content: [`# ${bundle.project.title}｜复盘`, '', `所属项目：[[${projectName}]]`, '', ...RETRO_OBSIDIAN_FIELDS.flatMap(({ key, title }) => [`## ${title}`, '', retrospectiveText(bundle.retrospective)[key] || '待补写。', '']), '## 论文没写的细节（原记录链接）', '', ...(bundle.notes.filter((note) => note.isHiddenDetail).map((note) => `- [[${note.id === undefined ? projectName : noteNames.get(note.id) ?? projectName}]]`) || ['- 暂无'])].join('\n'),
+    content: [
+      `# ${bundle.project.title}｜复盘`, '', `所属项目：[[${projectName}]]`, '',
+      ...RETRO_OBSIDIAN_FIELDS.flatMap(({ key, title }) => [
+        `## ${title}`, '', obsidianLinkedText(retroText[key] || '待补写。', conceptNames, stepNames), '',
+      ]),
+      '## 论文没写的细节（原记录链接）', '',
+      ...(hiddenNotes.length
+        ? hiddenNotes.map((note) => `- [[${note.id === undefined ? projectName : noteNames.get(note.id) ?? projectName}]]`)
+        : ['- 暂无']),
+    ].join('\n'),
   })
+  for (const step of bundle.planSteps) {
+    if (step.id === undefined) continue
+    const name = stepNames.get(step.id)!
+    const status = { done: '完成', doing: '进行中', blocked: '受阻', todo: '待办' }[step.status]
+    const relatedNotes = bundle.notes.filter((note) => note.stepId === step.id || note.stepIds.includes(step.id!))
+    notes.push({
+      fileName: `${name}.md`,
+      content: [
+        `# ${step.title}`, '', `所属项目：[[${projectName}]]`, '',
+        `里程碑：${step.milestone}；版本：v${step.version}；状态：${status}`, '',
+        step.detail || '暂无步骤说明', '',
+        `估时：${step.estimatedMinutes ? `${step.estimatedMinutes} 分钟` : '未填写'}`, '',
+        `检查点：${step.checkpoint || '未设置'}（${step.checkpointDone ? '已完成' : '未完成'}）`, '',
+        '## 关联概念', '',
+        ...(step.conceptIds.length
+          ? step.conceptIds.map((id) => `- ${conceptNames.has(id) ? `[[${conceptNames.get(id)}]]` : `概念 #${id}（未导出）`}`)
+          : ['- 无']), '',
+        '## 关联记录', '',
+        ...(relatedNotes.length
+          ? relatedNotes.map((note) => `- [[${note.id === undefined ? projectName : noteNames.get(note.id) ?? projectName}]]`)
+          : ['- 无']), '',
+      ].join('\n'),
+    })
+  }
   for (const element of bundle.elements) {
     if (element.id === undefined) continue
     const name = elementNames.get(element.id)!
@@ -226,7 +266,7 @@ export function buildObsidianNotes(bundle: ProjectBundle): ObsidianNote[] {
   for (const note of bundle.notes) {
     if (note.id === undefined) continue
     const name = noteNames.get(note.id)!
-    notes.push({ fileName: `${name}.md`, content: obsidianNoteContent(note, projectName, conceptNames, bundle) })
+    notes.push({ fileName: `${name}.md`, content: obsidianNoteContent(note, projectName, conceptNames, stepNames, bundle) })
   }
   return notes
 }
@@ -239,15 +279,22 @@ const RETRO_OBSIDIAN_FIELDS = [
   { key: 'hiddenDetails', title: '论文没写的细节补写' }, { key: 'authorContact', title: '与作者沟通' },
 ] as const
 
-function obsidianNoteContent(note: NoteEntry, projectName: string, conceptNames: Map<number, string>, bundle: ProjectBundle): string {
-  const content = note.conceptIds.reduce((text, id) => {
-    const name = conceptNames.get(id)
-    return name
-      ? text.replace(new RegExp(`\\[[^\\]\\n]*\\]\\(#concept-${id}\\)`, 'g'), `[[${name}]]`)
-      : text
-  }, note.content)
+function obsidianLinkedText(content: string, conceptNames: Map<number, string>, stepNames: Map<number, string>): string {
+  let linked = content
+  for (const [id, name] of conceptNames) {
+    linked = linked.replace(new RegExp(`\\[[^\\]\\n]*\\]\\(#concept-${id}\\)`, 'g'), () => `[[${name}]]`)
+  }
+  for (const [id, name] of stepNames) {
+    linked = linked.replace(new RegExp(`\\[[^\\]\\n]*\\]\\(#step-${id}\\)`, 'g'), () => `[[${name}]]`)
+  }
+  return linked
+}
+
+function obsidianNoteContent(note: NoteEntry, projectName: string, conceptNames: Map<number, string>, stepNames: Map<number, string>, bundle: ProjectBundle): string {
+  const content = obsidianLinkedText(note.content, conceptNames, stepNames)
   const step = bundle.planSteps.find((item) => item.id === note.stepId)
-  return [`# ${NOTE_KIND_LABEL[note.kind]}记录 #${note.id ?? ''}`, '', `所属项目：[[${projectName}]]`, '', `时间：${new Date(note.createdAt).toLocaleString('zh-CN')}`, '', `关联步骤：${step?.title ?? '无'}`, '', note.isHiddenDetail ? '> 论文没写的细节' : '', '', content || '（本地截图记录，图片请从 JSON 导出提取）', ''].join('\n')
+  const stepLink = step?.id !== undefined && stepNames.has(step.id) ? `[[${stepNames.get(step.id)}]]` : step?.title ?? '无'
+  return [`# ${NOTE_KIND_LABEL[note.kind]}记录 #${note.id ?? ''}`, '', `所属项目：[[${projectName}]]`, '', `时间：${new Date(note.createdAt).toLocaleString('zh-CN')}`, '', `关联步骤：${stepLink}`, '', note.isHiddenDetail ? '> 论文没写的细节' : '', '', content || '（本地截图记录，图片请从 JSON 导出提取）', ''].join('\n')
 }
 
 export async function exportObsidianZip(bundle: ProjectBundle): Promise<Blob> {

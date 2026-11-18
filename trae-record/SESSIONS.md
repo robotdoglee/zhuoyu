@@ -29,3 +29,5 @@
 | 25 | 2026-11-19 05:03 | M3 开始：新任务“实现琢玉 M3 复盘与导出”，提示词 prompts/07-m3-retro-export-skilltree.md | 待查 | screenshots/2026-11-19_0503_25-m3-prompt-sent.png |
 | 26 | 2026-11-19 05:39 | M3 导出验收时内置浏览器弹出系统“另存为”对话框阻塞（另有 ~/.config 写权限提示）；人工把两份导出存到临时目录后对话框清空 | 待查 | screenshots/2026-11-19_0539_26-m3-export-save-dialog.png |
 | 27 | 2026-11-19 05:41 | M3 导出面板：Markdown / Obsidian 笔记包 / JSON / Anki CSV / PDF 报告，仅本地生成；TRAE 继续做真实下载核对 | 待查 | screenshots/2026-11-19_0541_27-m3-export-panel.png |
+| 28 | 2026-11-19 05:57 | M3 浏览器验收：项目页、PDF 10 页 A4 + Mermaid 渲染、技能树同名去重 | 待查 | screenshots/2026-11-19_0557_28-m3-project-page.png |
+| 29 | 2026-11-19 06:26 | M3 完成：复盘关键事实与指标表一致（BLEU 偏差 −1.47% / −1.06%）；五种导出真实下载检查（Obsidian 40 篇/151 双链/缺失 0；JSON schema v4 不含 Key；Anki UTF-8 BOM 10 张；PDF 10 页）；同名 Softmax 只计一次、保留两个来源；Console 0 error；lint 0 error（11 个 React 类警告待修） | 待查 | screenshots/2026-11-19_0626_29-m3-complete.png |

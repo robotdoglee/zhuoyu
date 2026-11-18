@@ -106,7 +106,7 @@ function makeBundle(): ProjectBundle {
         projectId: 1,
         stepId: 20,
         kind: 'idea',
-        content: '发现 Adam β₂=0.98；[@卡片：注意力](#concept-10)',
+        content: '发现 Adam β₂=0.98；[@卡片：注意力](#concept-10)；[@步骤：训练](#step-20)',
         conceptIds: [10],
         stepIds: [20],
         completeCheckpoint: false,
@@ -196,7 +196,7 @@ describe('M3 本地导出', () => {
     expect(markdown).not.toContain('### 专栏补写')
   })
 
-  it('Obsidian 的每个双链都指向包内真实笔记，正文卡片引用也是直接双链', () => {
+  it('Obsidian 的每个双链都指向真实笔记，复盘和记录中的卡片与步骤引用也会转换', () => {
     const notes = buildObsidianNotes(withDraft(makeBundle()))
     const fileNames = new Set(notes.map((note) => note.fileName.slice(0, -3)))
 
@@ -204,12 +204,17 @@ describe('M3 本地导出', () => {
       for (const match of note.content.matchAll(/\[\[([^\]]+)\]\]/g)) {
         expect(fileNames, `${note.fileName} 中的 [[${match[1]}]]`).toContain(match[1])
       }
-      expect(note.content).not.toContain(']([[')
+      expect(note.content, note.fileName).not.toContain(']([[')
+      expect(note.content, note.fileName).not.toMatch(/\]\(#(?:concept|step)-/)
     }
 
     const hiddenNote = notes.find((note) => note.fileName === '记录-001-想法.md')
     expect(hiddenNote?.content).toContain('[[概念-01-注意力, -缩放点积-]]')
-    expect(hiddenNote?.content).not.toContain('](#concept-10)')
+    expect(hiddenNote?.content).toContain('[[计划-01-跑通 Base 模型训练]]')
+    const retroNote = notes.find((note) => note.fileName.startsWith('复盘-'))
+    expect(retroNote?.content).toContain('[[概念-01-注意力, -缩放点积-]]')
+    expect(retroNote?.content).toContain('[[计划-01-跑通 Base 模型训练]]')
+    expect(notes.find((note) => note.fileName === '计划-01-跑通 Base 模型训练.md')?.content).toContain('[[记录-001-想法]]')
   })
 
   it('JSON 可解析并保留历史计划、本地截图和完整复盘', () => {
