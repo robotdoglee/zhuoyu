@@ -75,6 +75,7 @@ export default function ConceptDialog({ concept, projectId, onClose, onSave }: C
         whyNeeded: whyNeeded.trim(),
         difficulty,
         mastery,
+        masteryUpdatedAt: mastery === concept?.mastery ? concept.masteryUpdatedAt : Date.now(),
         dependsOn: concept?.dependsOn ?? [],
         resources,
         createdAt: concept?.createdAt ?? Date.now(),

@@ -3,8 +3,9 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Link } from 'react-router-dom'
 import { db } from '../db/db'
-import type { Concept, NoteEntry, NoteKind, PlanStep } from '../db/types'
+import type { Concept, HiddenDetailType, NoteEntry, NoteKind, PlanStep } from '../db/types'
 import { diagnoseErrorLog, diagnosisToMarkdown, type ErrorDiagnosis } from '../lib/errorAssistant'
+import { HIDDEN_DETAIL_LABEL } from '../lib/retrospective'
 import { loadLlmSettings } from '../lib/settings'
 
 const KIND_LABEL: Record<NoteKind, string> = {
@@ -36,6 +37,8 @@ export default function NotebookPanel({ projectId, onOpenPlan }: NotebookPanelPr
   const [preview, setPreview] = useState(false)
   const [completeCheckpoint, setCompleteCheckpoint] = useState(false)
   const [completeStep, setCompleteStep] = useState(false)
+  const [isHiddenDetail, setIsHiddenDetail] = useState(false)
+  const [hiddenDetailType, setHiddenDetailType] = useState<HiddenDetailType>('hyperparameter')
   const [saving, setSaving] = useState(false)
   const [stepFilter, setStepFilter] = useState<number | 'all'>('all')
   const [error, setError] = useState('')
@@ -71,6 +74,7 @@ export default function NotebookPanel({ projectId, onOpenPlan }: NotebookPanelPr
     [notes, stepFilter],
   )
   const selectedStep = steps.find((step) => step.id === stepId)
+  const hiddenNotes = useMemo(() => notes.filter((note) => note.isHiddenDetail), [notes])
 
   function insertMention(type: 'concept' | 'step', id: number, label: string) {
     const token = `[@${type === 'concept' ? '卡片' : '步骤'}：${label}](#${type}-${id})`
@@ -138,6 +142,8 @@ export default function NotebookPanel({ projectId, onOpenPlan }: NotebookPanelPr
       completeCheckpoint: completeStep || completeCheckpoint,
       completeStep,
       imageData,
+      isHiddenDetail,
+      hiddenDetailType: isHiddenDetail ? hiddenDetailType : undefined,
       source: 'manual',
       createdAt: now,
       updatedAt: now,
@@ -167,6 +173,7 @@ export default function NotebookPanel({ projectId, onOpenPlan }: NotebookPanelPr
       setImageData(undefined)
       setCompleteCheckpoint(false)
       setCompleteStep(false)
+      setIsHiddenDetail(false)
       setPreview(false)
       setNotice(completeStep ? '记录已保存，关联步骤及其检查点已完成。' : completeCheckpoint ? '记录已保存，关联检查点已勾掉。' : '记录已保存到本机。')
     } catch (err) {
@@ -180,6 +187,25 @@ export default function NotebookPanel({ projectId, onOpenPlan }: NotebookPanelPr
     if (note.id === undefined || !window.confirm('删除这条记录？已经回写到计划的检查点和状态不会自动撤销。')) return
     await db.notes.delete(note.id)
     setNotes((current) => current.filter((item) => item.id !== note.id))
+  }
+
+  async function toggleHiddenDetail(note: NoteEntry) {
+    if (note.id === undefined) return
+    const isHidden = !note.isHiddenDetail
+    const changes: Partial<NoteEntry> = {
+      isHiddenDetail: isHidden,
+      hiddenDetailType: isHidden ? note.hiddenDetailType ?? 'other' : note.hiddenDetailType,
+      updatedAt: Date.now(),
+    }
+    await db.notes.update(note.id, changes)
+    setNotes((current) => current.map((item) => item.id === note.id ? { ...item, ...changes } : item))
+    setNotice(isHidden ? '已汇入「论文没写的细节」专栏，复盘重新汇总后会高亮。' : '已移出「论文没写的细节」专栏，原记录仍然保留。')
+  }
+
+  async function changeHiddenType(note: NoteEntry, hiddenDetailType: HiddenDetailType) {
+    if (note.id === undefined) return
+    await db.notes.update(note.id, { hiddenDetailType, updatedAt: Date.now() })
+    setNotes((current) => current.map((item) => item.id === note.id ? { ...item, hiddenDetailType } : item))
   }
 
   async function runErrorAssistant() {
@@ -209,6 +235,7 @@ export default function NotebookPanel({ projectId, onOpenPlan }: NotebookPanelPr
         stepIds: primaryStepId === undefined ? [] : [primaryStepId],
         completeCheckpoint: false,
         completeStep: false,
+        isHiddenDetail: false,
         source: 'error-assistant',
         createdAt: now,
         updatedAt: now,
@@ -247,6 +274,10 @@ export default function NotebookPanel({ projectId, onOpenPlan }: NotebookPanelPr
             </div>
             {preview ? <div className="markdown-body note-preview">{content ? <NoteMarkdown content={content} /> : <p className="muted">暂无文字内容。</p>}{imageData && <img className="note-image" src={imageData} alt="待保存的复现截图" />}</div> : <textarea ref={textareaRef} className="note-editor" rows={9} value={content} placeholder={`${KIND_HINT[kind]}\n\n支持 **加粗**、列表、代码块；用上方菜单插入 @卡片 / @步骤。`} onChange={(event) => setContent(event.target.value)} />}
             {kind === 'image' && <div className="image-picker"><label className="btn btn-ghost btn-sm">选择本地截图<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => { void selectImage(event.target.files?.[0]); event.target.value = '' }} /></label><span>PNG / JPEG / WebP / GIF，不超过 3 MB{imageData ? ' · 已选择 1 张' : ''}</span></div>}
+            <div className={`hidden-detail-marker ${isHiddenDetail ? 'active' : ''}`}>
+              <label><input type="checkbox" checked={isHiddenDetail} onChange={(event) => setIsHiddenDetail(event.target.checked)} /><strong>标记为「论文没写的细节」</strong><span>复盘时高亮汇总</span></label>
+              {isHiddenDetail && <select aria-label="论文没写的细节分类" value={hiddenDetailType} onChange={(event) => setHiddenDetailType(event.target.value as HiddenDetailType)}>{Object.entries(HIDDEN_DETAIL_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>}
+            </div>
             {selectedStep?.checkpoint && <div className="note-checkpoint-context"><b>当前检查点</b><span>{selectedStep.checkpoint}</span><small>{selectedStep.checkpointDone ? '已勾掉' : '未完成'}</small></div>}
             <div className="note-linkage">
               <label><input type="checkbox" disabled={stepId === '' || completeStep} checked={completeCheckpoint || completeStep} onChange={(event) => setCompleteCheckpoint(event.target.checked)} />保存后勾掉关联步骤检查点</label>
@@ -268,11 +299,20 @@ export default function NotebookPanel({ projectId, onOpenPlan }: NotebookPanelPr
         {assistantError && <div className="notice error" role="alert">{assistantError}</div>}
       </section>
 
+      <section className="hidden-details-column" aria-labelledby="hidden-details-title">
+        <header><div><p className="kicker">M3 / 论文没写的细节</p><h3 id="hidden-details-title">那些只有亲手做过才知道的事</h3><p>隐藏超参、预处理与评测口径会在这里单独沉淀，并在复盘中高亮。</p></div><span>{hiddenNotes.length} 条</span></header>
+        {hiddenNotes.length === 0 ? <p className="hidden-details-empty">还没有标记。新记录可勾选「论文没写的细节」，已有记录也可一键汇入。</p> : <div className="hidden-detail-list">{hiddenNotes.map((note) => <article key={note.id}>
+          <div><span>{HIDDEN_DETAIL_LABEL[note.hiddenDetailType ?? 'other']}</span><a href={`#note-${note.id}`}>查看原记录 #{note.id} →</a></div>
+          <p>{note.content || '（本地截图记录）'}</p>
+          <label>细节分类<select aria-label={`记录 ${note.id} 的细节分类`} value={note.hiddenDetailType ?? 'other'} onChange={(event) => void changeHiddenType(note, event.target.value as HiddenDetailType)}>{Object.entries(HIDDEN_DETAIL_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+        </article>)}</div>}
+      </section>
+
       <section className="note-list-section" aria-labelledby="note-list-title">
         <header><div><p className="kicker">记录流</p><h3 id="note-list-title">复现过程，按时间倒序</h3></div><label>筛选步骤<select value={stepFilter} onChange={(event) => setStepFilter(event.target.value === 'all' ? 'all' : Number(event.target.value))}><option value="all">全部记录（{notes.length}）</option>{steps.map((step) => <option key={step.id} value={step.id}>{step.title}</option>)}</select></label></header>
         {loading ? <div className="page-loading"><span className="loading-dot" />正在读取记录…</div> : filteredNotes.length === 0 ? <div className="note-list-empty"><span>还没有{stepFilter === 'all' ? '' : '这一步的'}记录。先保存一条命令、结果或想法。</span></div> : <div className="note-list">{filteredNotes.map((note) => {
           const step = steps.find((item) => item.id === note.stepId)
-          return <article className={`note-card note-${note.kind}`} key={note.id} id={`note-${note.id}`}><header><div><span className={`note-kind kind-${note.kind}`}>{KIND_LABEL[note.kind]}</span>{note.source === 'error-assistant' && <span className="note-source">报错助手</span>}{note.source === 'example' && <span className="note-source">示例</span>}<time>{new Date(note.createdAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</time></div><button className="btn btn-quiet btn-sm danger" onClick={() => void removeNote(note)}>删除</button></header><div className="note-step-reference">{step ? `@步骤：${step.title}` : note.stepId ? '@步骤：原步骤已删除' : '自由记录'}</div><div className="markdown-body"><NoteMarkdown content={note.content || '（截图记录）'} onStepMention={(id) => setStepFilter(id)} />{note.imageData && <img className="note-image" src={note.imageData} alt="复现过程截图" />}</div>{(note.completeCheckpoint || note.completeStep) && <footer><span className="note-writeback">{note.completeStep ? '✓ 已回写：检查点完成 · 步骤完成' : '✓ 已回写：检查点完成'}</span></footer>}</article>
+          return <article className={`note-card note-${note.kind} ${note.isHiddenDetail ? 'is-hidden-detail' : ''}`} key={note.id} id={`note-${note.id}`}><header><div><span className={`note-kind kind-${note.kind}`}>{KIND_LABEL[note.kind]}</span>{note.source === 'error-assistant' && <span className="note-source">报错助手</span>}{note.source === 'example' && <span className="note-source">示例</span>}{note.isHiddenDetail && <span className="note-hidden-badge">论文没写的细节 · {HIDDEN_DETAIL_LABEL[note.hiddenDetailType ?? 'other']}</span>}<time>{new Date(note.createdAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</time></div><div className="note-card-actions"><button className="btn btn-quiet btn-sm" onClick={() => void toggleHiddenDetail(note)}>{note.isHiddenDetail ? '移出细节专栏' : '标为论文细节'}</button><button className="btn btn-quiet btn-sm danger" onClick={() => void removeNote(note)}>删除</button></div></header><div className="note-step-reference">{step ? `@步骤：${step.title}` : note.stepId ? '@步骤：原步骤已删除' : '自由记录'}</div><div className="markdown-body"><NoteMarkdown content={note.content || '（截图记录）'} onStepMention={(id) => setStepFilter(id)} />{note.imageData && <img className="note-image" src={note.imageData} alt="复现过程截图" />}</div>{(note.completeCheckpoint || note.completeStep) && <footer><span className="note-writeback">{note.completeStep ? '✓ 已回写：检查点完成 · 步骤完成' : '✓ 已回写：检查点完成'}</span></footer>}</article>
         })}</div>}
       </section>
     </div>

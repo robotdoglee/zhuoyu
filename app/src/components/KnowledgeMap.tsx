@@ -104,8 +104,9 @@ function KnowledgeMapInner({ projectId }: KnowledgeMapProps) {
   const openConcept = useCallback((concept: Concept) => setEditing(concept), [])
   const changeMastery = useCallback(async (concept: Concept, mastery: Mastery) => {
     if (concept.id === undefined || concept.mastery === mastery) return
-    await db.concepts.update(concept.id, { mastery })
-    setConcepts((current) => current.map((item) => item.id === concept.id ? { ...item, mastery } : item))
+    const masteryUpdatedAt = Date.now()
+    await db.concepts.update(concept.id, { mastery, masteryUpdatedAt })
+    setConcepts((current) => current.map((item) => item.id === concept.id ? { ...item, mastery, masteryUpdatedAt } : item))
   }, [])
   const deleteConcept = useCallback(async (concept: Concept) => {
     if (concept.id === undefined || !window.confirm(`删除概念「${concept.name}」？相关依赖边会同步清理。`)) return

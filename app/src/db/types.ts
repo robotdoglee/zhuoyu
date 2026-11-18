@@ -146,6 +146,8 @@ export interface Concept {
   /** 最近一次拖拽或自动布局后的画布位置 */
   position?: { x: number; y: number }
   resources: ResourceLink[]
+  /** 最近一次掌握度变更时间，用于跨项目成长时间线 */
+  masteryUpdatedAt?: number
   createdAt: number
 }
 
@@ -185,6 +187,7 @@ export interface PlanVersion {
 
 export type NoteKind = 'command' | 'code' | 'result' | 'error' | 'idea' | 'image'
 export type NoteSource = 'manual' | 'example' | 'error-assistant'
+export type HiddenDetailType = 'hyperparameter' | 'preprocessing' | 'data' | 'evaluation' | 'environment' | 'other'
 
 export interface NoteEntry {
   id?: number
@@ -201,6 +204,9 @@ export interface NoteEntry {
   completeStep: boolean
   /** 截图的本地 Data URL，不发起外部请求 */
   imageData?: string
+  /** 是否汇入「论文没写的细节」专栏 */
+  isHiddenDetail?: boolean
+  hiddenDetailType?: HiddenDetailType
   source: NoteSource
   createdAt: number
   updatedAt: number
@@ -225,8 +231,13 @@ export interface Retrospective {
   scope?: string
   method?: string
   results?: string
-  /** 偏差归因：数据 / 超参 / 随机种子 / 硬件 */
+  /** 偏差归因总述 */
   deviations?: string
+  dataDeviation?: string
+  hyperparameterDeviation?: string
+  seedDeviation?: string
+  hardwareDeviation?: string
+  /** 难点与易点 */
   difficulties?: string
   /** 论文没写的细节 */
   hiddenDetails?: string

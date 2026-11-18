@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState, type KeyboardEvent } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import PaperSection from '../components/PaperSection'
 import BreakdownPanel from '../components/BreakdownPanel'
 import KnowledgeMap from '../components/KnowledgeMap'
 import PlanPanel from '../components/PlanPanel'
 import NotebookPanel from '../components/NotebookPanel'
 import MetricTable from '../components/MetricTable'
+import RetrospectivePanel from '../components/RetrospectivePanel'
 import { db } from '../db/db'
 import { levelName, type Paper, type Project } from '../db/types'
 import { formatDate } from '../lib/format'
@@ -69,12 +70,14 @@ type PageStatus = 'loading' | 'ready' | 'missing'
 
 export default function ProjectPage() {
   const { projectId } = useParams()
+  const [searchParams] = useSearchParams()
   const numericId = Number(projectId)
+  const requestedTab = searchParams.get('tab')
 
   const [status, setStatus] = useState<PageStatus>('loading')
   const [project, setProject] = useState<Project | null>(null)
   const [paper, setPaper] = useState<Paper | undefined>(undefined)
-  const [activeTab, setActiveTab] = useState<TabId>('breakdown')
+  const [activeTab, setActiveTab] = useState<TabId>(() => TABS.some((tab) => tab.id === requestedTab) ? requestedTab as TabId : 'breakdown')
   const [sourceRequest, setSourceRequest] = useState<{ page: number; quote?: string; nonce: number }>()
 
   const load = useCallback(async () => {
@@ -207,20 +210,7 @@ export default function ProjectPage() {
             <MetricTable projectId={project.id ?? numericId} />
           </>
         ) : (
-          <div className="placeholder-card">
-            <div className="placeholder-index" aria-hidden="true">{active.index}</div>
-            <div className="placeholder-body">
-              <div className="placeholder-top">
-                <h3>{active.title}</h3>
-                <span className="milestone-pill">{active.milestone} 里程碑</span>
-              </div>
-              <p className="placeholder-desc">{active.description}</p>
-              <ul className="placeholder-points">
-                {active.points.map((point) => <li key={point}>{point}</li>)}
-              </ul>
-              <p className="placeholder-foot">M1 拆解与框图、M2 计划与记事本已可用；该模块将在后续里程碑交付。</p>
-            </div>
-          </div>
+          <RetrospectivePanel projectId={project.id ?? numericId} />
         )}
       </section>
     </div>

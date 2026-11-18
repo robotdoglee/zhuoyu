@@ -1,6 +1,8 @@
 import { db } from '../db/db'
 import type { Concept, ElementType, NoteEntry, PaperPage, ResourceLink } from '../db/types'
 import { verifyAnchor } from './anchors'
+import { buildRetrospectiveDraft } from './retrospective'
+import { loadProjectBundle } from './projectData'
 
 const EXAMPLE_PROJECT_TITLE = 'Attention Is All You Need（L2 复现）'
 const ARXIV_URL = 'https://arxiv.org/abs/1706.03762'
@@ -480,12 +482,13 @@ const EXAMPLE_DEPENDENCIES: Record<string, string[]> = {
 }
 
 export async function loadExampleProject(): Promise<{ projectId: number; existing: boolean }> {
-  return db.transaction('rw', [db.projects, db.papers, db.elements, db.concepts, db.planSteps, db.notes, db.metrics], async () => {
+  return db.transaction('rw', [db.projects, db.papers, db.elements, db.concepts, db.planSteps, db.planVersions, db.notes, db.metrics, db.retrospectives], async () => {
     const existing = (await db.projects.toArray()).find(
       (project) => project.title === EXAMPLE_PROJECT_TITLE,
     )
     if (existing?.id !== undefined) {
       await ensureExampleM2Data(existing.id, Date.now())
+      await ensureExampleM3Data(existing.id, Date.now())
       return { projectId: existing.id, existing: true }
     }
 
@@ -552,6 +555,7 @@ export async function loadExampleProject(): Promise<{ projectId: number; existin
         mastery: concept.mastery,
         dependsOn: [],
         resources: concept.resources,
+        masteryUpdatedAt: concept.mastery === 'known' ? now : undefined,
         createdAt: now,
       })
       if (id === undefined) throw new Error(`创建概念「${concept.name}」后未获得编号。`)
@@ -566,6 +570,7 @@ export async function loadExampleProject(): Promise<{ projectId: number; existin
     }
 
     await ensureExampleM2Data(projectId, now)
+    await ensureExampleM3Data(projectId, now)
     return { projectId, existing: false }
   })
 }
@@ -646,6 +651,7 @@ async function ensureExampleM2Data(projectId: number, now: number): Promise<void
         stepIds: stepId === undefined ? [] : [stepId],
         completeCheckpoint: seed.complete,
         completeStep: seed.complete,
+        isHiddenDetail: false,
         source: 'example',
         createdAt: now + index,
         updatedAt: now + index,
@@ -663,5 +669,61 @@ async function ensureExampleM2Data(projectId: number, now: number): Promise<void
     if (!existingMetrics.some((item) => item.name === metric.name)) {
       await db.metrics.add({ ...metric, projectId, createdAt: now + index })
     }
+  }
+}
+
+/** M2 示例幂等补齐 M3：两条隐藏细节与一份可继续补写的复盘初稿。 */
+async function ensureExampleM3Data(projectId: number, now: number): Promise<void> {
+  const [steps, concepts, existingNotes] = await Promise.all([
+    db.planSteps.where('projectId').equals(projectId).toArray(),
+    db.concepts.where('projectId').equals(projectId).toArray(),
+    db.notes.where('projectId').equals(projectId).toArray(),
+  ])
+  const detailSeeds = [
+    {
+      marker: '【论文没写的细节】隐藏超参：Adam β₂',
+      stepTitle: '对齐 Transformer Base 配置',
+      conceptName: 'Adam 与学习率预热',
+      type: 'hyperparameter' as const,
+      content: '【论文没写的细节】隐藏超参：Adam β₂\n\n论文第 6 页写明 β₂ = 0.98，但框架默认值常是 0.999。配置 diff 时必须显式写入 `beta2=0.98`，不能只选择 `transformer_base` 就假设所有默认值都与论文一致。',
+    },
+    {
+      marker: '【论文没写的细节】预处理：句对过滤与长度组批',
+      stepTitle: '核对 WMT14 数据与共享 BPE',
+      conceptName: 'BPE 分词',
+      type: 'preprocessing' as const,
+      content: '【论文没写的细节】预处理：句对过滤与长度组批\n\n论文给出了按近似长度组批和每批 token 数，却没有完整列出实现中的空句、超长句过滤细节。更换数据加载器后，要另行记录过滤阈值、句对排序与随机打乱方式，否则有效 batch token 数和训练曲线都会变化。',
+    },
+  ]
+  for (const [index, seed] of detailSeeds.entries()) {
+    if (existingNotes.some((note) => note.source === 'example' && note.content.includes(seed.marker))) continue
+    const step = steps.find((item) => item.title === seed.stepTitle) ?? steps[0]
+    const concept = concepts.find((item) => item.name === seed.conceptName)
+    const stepId = step?.id
+    await db.notes.add({
+      projectId,
+      stepId,
+      kind: 'idea',
+      content: `${seed.content}\n\n${concept?.id ? `[@卡片：${concept.name}](#concept-${concept.id})` : ''}${stepId ? ` [@步骤：${step.title}](#step-${stepId})` : ''}`,
+      conceptIds: concept?.id === undefined ? [] : [concept.id],
+      stepIds: stepId === undefined ? [] : [stepId],
+      completeCheckpoint: false,
+      completeStep: false,
+      isHiddenDetail: true,
+      hiddenDetailType: seed.type,
+      source: 'example',
+      createdAt: now + 20 + index,
+      updatedAt: now + 20 + index,
+    })
+  }
+  const existingRetro = await db.retrospectives.where('projectId').equals(projectId).first()
+  if (!existingRetro) {
+    const bundle = await loadProjectBundle(projectId)
+    await db.retrospectives.add({
+      projectId,
+      ...buildRetrospectiveDraft(bundle),
+      createdAt: now,
+      updatedAt: now,
+    })
   }
 }

@@ -91,6 +91,43 @@ export class ZhuoyuDatabase extends Dexie {
           note.source ||= 'manual'
         })
       })
+
+    this.version(4)
+      .stores({
+        projects: '++id, updatedAt, createdAt',
+        papers: '++id, projectId, createdAt, arxivId, doi',
+        chunks: '&id, projectId, paperId, page',
+        elements: '++id, projectId, paperId, type',
+        concepts: '++id, projectId, createdAt',
+        planSteps: '++id, projectId, status, order, version, [projectId+version]',
+        planVersions: '++id, projectId, version, createdAt, [projectId+version]',
+        notes: '++id, projectId, stepId, kind, createdAt, source',
+        metrics: '++id, projectId, createdAt',
+        retrospectives: '++id, &projectId, createdAt',
+      })
+      .upgrade(async (transaction) => {
+        // M3 只补充字段，不重写旧内容；已有复盘总述原样保留。
+        await transaction.table('notes').toCollection().modify((note: Partial<NoteEntry>) => {
+          note.isHiddenDetail ??= false
+          if (note.isHiddenDetail) note.hiddenDetailType ||= 'other'
+        })
+        await transaction.table('concepts').toCollection().modify((concept: Partial<Concept>) => {
+          if (concept.mastery === 'known') concept.masteryUpdatedAt ||= concept.createdAt ?? Date.now()
+        })
+        await transaction.table('retrospectives').toCollection().modify((retro: Partial<Retrospective>) => {
+          retro.scope ||= ''
+          retro.method ||= ''
+          retro.results ||= ''
+          retro.deviations ||= ''
+          retro.dataDeviation ||= ''
+          retro.hyperparameterDeviation ||= ''
+          retro.seedDeviation ||= ''
+          retro.hardwareDeviation ||= ''
+          retro.difficulties ||= ''
+          retro.hiddenDetails ||= ''
+          retro.authorContact ||= ''
+        })
+      })
   }
 }
 

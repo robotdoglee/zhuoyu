@@ -3,6 +3,7 @@ import { BrandMark } from './components/BrandMark'
 import HomePage from './pages/HomePage'
 import ProjectPage from './pages/ProjectPage'
 import SettingsPage from './pages/SettingsPage'
+import SkillsPage from './pages/SkillsPage'
 
 function SiteHeader() {
   return (
@@ -20,6 +21,7 @@ function SiteHeader() {
             <span className="status-dot" aria-hidden="true" />
             本地优先 · 数据只存这台设备
           </div>
+          <Link to="/skills" className="settings-link">技能树</Link>
           <Link to="/settings" className="settings-link">LLM 设置</Link>
         </div>
       </div>
@@ -32,7 +34,7 @@ function SiteFooter() {
     <footer className="site-footer">
       <div className="container footer-inner">
         <span>琢玉 · 把论文亲手做一遍</span>
-        <span>M2 计划与记事本 · 无后端 · 数据留在浏览器</span>
+        <span>M3 复盘、导出与技能树 · 无后端 · 数据留在浏览器</span>
       </div>
     </footer>
   )
@@ -48,6 +50,7 @@ export default function App() {
             <Route path="/" element={<HomePage />} />
             <Route path="/project/:projectId" element={<ProjectPage />} />
             <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/skills" element={<SkillsPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
