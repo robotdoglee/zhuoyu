@@ -68,34 +68,53 @@ function getPdfjs() {
 export async function parsePdfFile(
   file: File,
   onProgress?: (progress: PdfParseProgress) => void,
+  signal?: AbortSignal,
 ): Promise<PdfParseResult> {
+  throwIfAborted(signal)
   if (file.size > MAX_BYTES) {
     throw new Error(`这个 PDF 有 ${(file.size / 1024 / 1024).toFixed(1)} MB，M0 暂支持 80 MB 以内。`)
   }
 
   const pdfjs = await getPdfjs()
+  throwIfAborted(signal)
   const data = new Uint8Array(await file.arrayBuffer())
+  throwIfAborted(signal)
   const loadingTask = pdfjs.getDocument({ data })
   const doc = await loadingTask.promise
 
   try {
+    throwIfAborted(signal)
     if (doc.numPages > MAX_PAGES) {
       throw new Error(`这个 PDF 有 ${doc.numPages} 页，M0 暂支持 ${MAX_PAGES} 页以内。`)
     }
 
+    onProgress?.({ current: 0, total: doc.numPages })
     const info = await readInfo(doc)
+    throwIfAborted(signal)
     const pages: PaperPage[] = []
     let charCount = 0
 
-    for (let pageNumber = 1; pageNumber <= doc.numPages; pageNumber += 1) {
-      const page = await doc.getPage(pageNumber)
-      const content = await page.getTextContent()
-      const text = joinPageText(content.items)
-      charCount += text.length
-      pages.push({ page: pageNumber, text })
-      page.cleanup()
-      onProgress?.({ current: pageNumber, total: doc.numPages })
+    for (const batch of createPdfPageBatches(doc.numPages)) {
+      throwIfAborted(signal)
+      for (let pageNumber = batch.start; pageNumber <= batch.end; pageNumber += 1) {
+        throwIfAborted(signal)
+        const page = await doc.getPage(pageNumber)
+        try {
+          const content = await page.getTextContent()
+          throwIfAborted(signal)
+          const text = joinPageText(content.items)
+          charCount += text.length
+          pages.push({ page: pageNumber, text })
+          onProgress?.({ current: pageNumber, total: doc.numPages })
+        } finally {
+          page.cleanup()
+        }
+      }
+      if (batch.end < doc.numPages) {
+        await yieldToMainThread()
+      }
     }
+    throwIfAborted(signal)
 
     return {
       title: info.title || file.name.replace(/\.pdf$/i, ''),

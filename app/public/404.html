@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#faf9f5" />
+    <title>正在返回琢玉…</title>
+    <script>
+      ;(function () {
+        var target = window.location.pathname + window.location.search + window.location.hash
+        try {
+          window.sessionStorage.setItem('zhuoyu:spa-redirect', target)
+        } catch {
+          // 存储不可用时仍回到首页，避免停留在静态主机的 404 页面。
+        }
+        window.location.replace('/')
+      })()
+    </script>
+  </head>
+  <body>
+    <noscript><a href="/">返回琢玉首页</a></noscript>
+  </body>
+</html>

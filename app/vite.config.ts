@@ -3,6 +3,7 @@ import { defineConfig } from 'vite'
 
 // https://vite.dev/config/
 export default defineConfig({
+  base: '/',
   plugins: [react()],
   server: {
     // 本地开发时通过 Vite 代理访问 arXiv API，绕过浏览器跨域限制。

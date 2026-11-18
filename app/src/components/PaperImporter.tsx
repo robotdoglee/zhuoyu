@@ -35,6 +35,7 @@ export default function PaperImporter({
   const [query, setQuery] = useState('')
   const [lookingUp, setLookingUp] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
 
   async function handleFile(file: File) {
     setError('')
@@ -44,16 +45,25 @@ export default function PaperImporter({
     }
     if (parsing) return
 
+    const controller = new AbortController()
+    abortControllerRef.current = controller
     setParsing(true)
     setFileName(file.name)
     setProgress(null)
 
     try {
-      const result = await parsePdfFile(file, setProgress)
+      const result = await parsePdfFile(file, setProgress, controller.signal)
       await persistPdf(result, file.name)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'PDF 解析失败，请换一个文件重试。')
+      setError(
+        err instanceof Error && err.name === 'AbortError'
+          ? '已取消解析，未保存任何内容。可重新选择 PDF 重试。'
+          : err instanceof Error
+            ? err.message
+            : 'PDF 解析失败，请换一个文件重试。',
+      )
     } finally {
+      if (abortControllerRef.current === controller) abortControllerRef.current = null
       setParsing(false)
       setProgress(null)
     }
@@ -224,7 +234,7 @@ export default function PaperImporter({
       )}
 
       {tab === 'pdf' || attachOnly ? (
-        <div className="import-pane">
+        <div className="import-pane" aria-busy={parsing}>
           <div
             className={`dropzone ${dragging ? 'dragging' : ''} ${busy ? 'is-busy' : ''}`}
             role="button"
@@ -275,8 +285,18 @@ export default function PaperImporter({
               <div className="parse-progress-head">
                 <span>正在读取 {fileName || 'PDF'}</span>
                 <span>{progress ? `${progress.current} / ${progress.total} 页` : '准备中…'}</span>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => abortControllerRef.current?.abort()}>
+                  取消解析
+                </button>
               </div>
-              <div className="progress-track">
+              <div
+                className="progress-track"
+                role="progressbar"
+                aria-label="PDF 解析进度"
+                aria-valuemin={0}
+                aria-valuemax={progress?.total ?? 100}
+                aria-valuenow={progress?.current}
+              >
                 <span
                   style={{
                     width: progress ? `${(progress.current / progress.total) * 100}%` : '6%',

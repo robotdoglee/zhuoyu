@@ -10,6 +10,19 @@
       content="琢玉：如切如磋，如琢如磨。帮人亲手复现论文的本地优先工作台。"
     />
     <title>琢玉 · 如切如磋，如琢如磨</title>
+    <script>
+      ;(function () {
+        try {
+          var redirect = window.sessionStorage.getItem('zhuoyu:spa-redirect')
+          if (redirect && redirect.charAt(0) === '/') {
+            window.sessionStorage.removeItem('zhuoyu:spa-redirect')
+            window.history.replaceState(null, '', redirect)
+          }
+        } catch {
+          // 隐私模式禁用存储时按普通首页打开。
+        }
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

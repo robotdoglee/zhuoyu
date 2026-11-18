@@ -32,3 +32,5 @@
 | 28 | 2026-11-19 05:57 | M3 浏览器验收：项目页、PDF 10 页 A4 + Mermaid 渲染、技能树同名去重 | 待查 | screenshots/2026-11-19_0557_28-m3-project-page.png |
 | 29 | 2026-11-19 06:26 | M3 完成：复盘关键事实与指标表一致（BLEU 偏差 −1.47% / −1.06%）；五种导出真实下载检查（Obsidian 40 篇/151 双链/缺失 0；JSON schema v4 不含 Key；Anki UTF-8 BOM 10 张；PDF 10 页）；同名 Softmax 只计一次、保留两个来源；Console 0 error；lint 0 error（11 个 React 类警告待修） | 待查 | screenshots/2026-11-19_0626_29-m3-complete.png |
 | 30 | 2026-11-19 06:29 | M4 打磨与示例 prompt 发送（prompts/08-m4-polish.md；不含部署） | 待查 | screenshots/2026-11-19_0629_30-m4-prompt-sent.png |
+| 31 | 2026-11-19 07:23 | M4 进行中：ResNet 示例、统一状态组件、分页、101 页 PDF 分批解析完成；代理凭据过期导致 973 中断，重启 chainproxy | 待查 | screenshots/2026-11-19_0724_31-m4-proxy-973.png |
+| 32 | 2026-11-19 07:25 | M4 继续（prompts/09-m4-continue.md）：移动端/可访问性/lint/README | 待查 | screenshots/2026-11-19_0725_32-m4-continue.png |
