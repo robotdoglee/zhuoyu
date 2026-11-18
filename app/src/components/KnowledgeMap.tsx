@@ -10,13 +10,13 @@ import {
   Position,
   ReactFlow,
   ReactFlowProvider,
-  useEdgesState,
-  useNodesState,
   useReactFlow,
   type Connection,
   type Edge,
   type Node,
   type NodeProps,
+  type OnEdgesChange,
+  type OnNodesChange,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { db } from '../db/db'
@@ -78,12 +78,20 @@ export default function KnowledgeMap(props: KnowledgeMapProps) {
 function KnowledgeMapInner({ projectId }: KnowledgeMapProps) {
   const [concepts, setConcepts] = useState<Concept[]>([])
   const [loading, setLoading] = useState(true)
-  const [nodes, setNodes, onNodesChange] = useNodesState<ConceptFlowNode>([])
-  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
+  const [nodes, setNodes] = useState<ConceptFlowNode[]>([])
+  const [edges, setEdges] = useState<Edge[]>([])
   const [editing, setEditing] = useState<Concept | 'new' | null>(null)
-  const [selectedEdges, setSelectedEdges] = useState<Edge[]>([])
   const [error, setError] = useState('')
   const { fitView } = useReactFlow()
+
+  // React Flow 只维护受控 UI 状态；频繁的选择、拖拽变化不触碰 IndexedDB。
+  const onNodesChange = useCallback<OnNodesChange<ConceptFlowNode>>((changes) => {
+    setNodes((current) => changes.applyTo(current))
+  }, [])
+  const onEdgesChange = useCallback<OnEdgesChange<Edge>>((changes) => {
+    setEdges((current) => changes.applyTo(current))
+  }, [])
+  const selectedEdges = useMemo(() => edges.filter((edge) => edge.selected), [edges])
 
   const load = useCallback(async () => {
     const rows = await db.concepts.where('projectId').equals(projectId).toArray()
@@ -119,21 +127,26 @@ function KnowledgeMapInner({ projectId }: KnowledgeMapProps) {
   useEffect(() => {
     const layout = computeLayout(concepts)
     setNodes((current) => {
-      const positions = new Map(current.map((node) => [node.id, node.position]))
+      const previous = new Map(current.map((node) => [node.id, node]))
       return concepts.flatMap((concept) => {
         if (concept.id === undefined) return []
         const id = String(concept.id)
+        const existing = previous.get(id)
         return [{
+          ...existing,
           id,
           type: 'concept' as const,
-          position: positions.get(id) ?? layout.get(id) ?? { x: 0, y: 0 },
+          position: existing?.position ?? concept.position ?? layout.get(id) ?? { x: 0, y: 0 },
           deletable: false,
           data: { concept, onOpen: openConcept, onMastery: changeMastery, onDelete: deleteConcept },
         }]
       })
     })
-    setEdges(makeEdges(concepts))
-  }, [concepts, deleteConcept, openConcept, changeMastery, setEdges, setNodes])
+    setEdges((current) => {
+      const selected = new Set(current.filter((edge) => edge.selected).map((edge) => edge.id))
+      return makeEdges(concepts).map((edge) => ({ ...edge, selected: selected.has(edge.id) }))
+    })
+  }, [concepts, deleteConcept, openConcept, changeMastery])
 
   const learningPath = useMemo(() => buildLearningPath(concepts), [concepts])
   const cycleMembers = useMemo(() => findCycleMembers(concepts), [concepts])
@@ -172,23 +185,48 @@ function KnowledgeMapInner({ projectId }: KnowledgeMapProps) {
       const sources = concept.id === undefined ? undefined : byTarget.get(concept.id)
       return sources ? { ...concept, dependsOn: concept.dependsOn.filter((id) => !sources.has(id)) } : concept
     }))
-    setSelectedEdges([])
   }
 
   async function saveConcept(concept: Concept) {
     if (concept.id === undefined) {
-      const id = await db.concepts.add(concept)
-      setConcepts((current) => [...current, { ...concept, id }])
+      const temporaryId = -Date.now()
+      const position = concept.position ?? computeLayout([
+        ...concepts,
+        { ...concept, id: temporaryId },
+      ]).get(String(temporaryId))
+      const id = await db.concepts.add({ ...concept, position })
+      setConcepts((current) => [...current, { ...concept, id, position }])
     } else {
-      await db.concepts.put(concept)
-      setConcepts((current) => current.map((item) => item.id === concept.id ? concept : item))
+      const position = nodes.find((node) => node.id === String(concept.id))?.position ?? concept.position
+      const saved = { ...concept, position }
+      await db.concepts.put(saved)
+      setConcepts((current) => current.map((item) => item.id === concept.id ? saved : item))
     }
     setEditing(null)
   }
 
+  async function persistPositions(positionedNodes: ConceptFlowNode[]) {
+    if (!positionedNodes.length) return
+    const positions = new Map(positionedNodes.map((node) => [Number(node.id), node.position]))
+    await db.transaction('rw', db.concepts, async () => {
+      for (const [id, position] of positions) {
+        if (Number.isInteger(id)) await db.concepts.update(id, { position })
+      }
+    })
+    setConcepts((current) => current.map((concept) => {
+      const position = concept.id === undefined ? undefined : positions.get(concept.id)
+      return position ? { ...concept, position } : concept
+    }))
+  }
+
   function autoLayout() {
     const layout = computeLayout(concepts)
-    setNodes((current) => current.map((node) => ({ ...node, position: layout.get(node.id) ?? node.position })))
+    const positioned = nodes.map((node) => ({
+      ...node,
+      position: layout.get(node.id) ?? node.position,
+    }))
+    setNodes(positioned)
+    void persistPositions(positioned)
     window.setTimeout(() => void fitView({ padding: 0.16, duration: 240 }), 30)
   }
 
@@ -234,7 +272,7 @@ function KnowledgeMapInner({ projectId }: KnowledgeMapProps) {
               onEdgesChange={onEdgesChange}
               onConnect={(connection) => void connect(connection)}
               onEdgesDelete={(removed) => void removeEdges(removed)}
-              onSelectionChange={({ edges: selected }) => setSelectedEdges(selected)}
+              onNodeDragStop={(_, _node, draggedNodes) => void persistPositions(draggedNodes)}
               fitView
               minZoom={0.25}
               maxZoom={1.8}

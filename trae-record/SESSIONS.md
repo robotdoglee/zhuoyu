@@ -17,3 +17,6 @@
 | 11 | 2026-11-19 01:52 | M1 浏览器自测发现 Wikipedia 返回结构解析异常，TRAE 自行定位修复 | 6afddac8651900d875a50d19 | screenshots/2026-11-19_0152_11-m1-selftest-bugfix.png |
 | 12 | 2026-11-19 02:04 | M1 知识框图 DAG 已渲染；TRAE 服务端报 Unknown system error (600) 中断，发送「继续」恢复 | 6afddac8651900d875a50d19 | screenshots/2026-11-19_0204_12-m1-graph-error-600.png |
 | 13 | 2026-11-19 02:20 | 学习路径已出（7 步按依赖）；TRAE 定位 React Flow 选择状态死循环（Maximum update depth）时再遇 600 错误中断 | 6afddac8651900d875a50d19 | screenshots/2026-11-19_0220_13-m1-learning-path-error-600.png |
+| 14-16 | 2026-11-19 02:21-02:23 | 新任务「Fix Knowledge Graph…」接手 M1 收尾（prompts/04）；遇 Service unavailable，Restart Service 后重试成功 | 6afdeca2651900d875a50fda | screenshots/2026-11-19_0222_15-service-unavailable.png, screenshots/2026-11-19_0223_16-m1-fix-task-running.png |
+| 17 | 2026-11-19 02:38 | 死循环修复（受控状态 + Dexie 写入时机），Console 0 报错，Browser Use Agent 逐项验收 DAG 联动 | 6afdeca2651900d875a50fda | screenshots/2026-11-19_0238_17-m1-loop-fixed-console-0.png |
+| 18 | 2026-11-19 03:04 | 本地链式代理凭据过期导致 TRAE 弹 Proxy 407、任务报 600 中断；已重启代理（curl 200），死循环修复已 Keep All，build 通过 | 6afdeca2651900d875a50fda | screenshots/2026-11-19_0304_18-proxy-407-error-600.png |

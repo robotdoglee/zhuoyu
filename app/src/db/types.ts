@@ -143,6 +143,8 @@ export interface Concept {
   mastery: Mastery
   /** 依赖的概念 id，用于生成 DAG 与学习路径 */
   dependsOn: number[]
+  /** 最近一次拖拽或自动布局后的画布位置 */
+  position?: { x: number; y: number }
   resources: ResourceLink[]
   createdAt: number
 }
