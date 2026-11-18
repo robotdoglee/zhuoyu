@@ -22,3 +22,5 @@
 | 18 | 2026-11-19 03:04 | 本地链式代理凭据过期导致 TRAE 弹 Proxy 407、任务报 600 中断；已重启代理（curl 200），死循环修复已 Keep All，build 通过 | 6afdeca2651900d875a50fda | screenshots/2026-11-19_0304_18-proxy-407-error-600.png |
 | 19 | 2026-11-19 03:26 | M1 收尾验收完成（新任务“完成项目验收与更新 README”）：示例项目 10 节点 6 边、学习路径 7 步、无 key 启发式拆解 24 条（全部核实）、Console 0 error、npm run build 通过；修复 StrictMode 重复写入 ConstraintError（bulkPut），README 更新至 M1。npm test 被 TRAE 沙箱拦截未执行 | 待查 | screenshots/2026-11-19_0328_19-m1-acceptance-done.png |
 | 20 | 2026-11-19 03:29 | M2 开始：新任务“实现琢玉M2核心功能模块”，提示词 prompts/05-m2-plan-notebook-metrics.md | 待查 | screenshots/2026-11-19_0329_20-m2-prompt-sent.png |
+| 21 | 2026-11-19 04:04 | 运行环境重启，TRAE 进程丢失；M2 进行中任务报 Model Request failed (3003)。已提交 WIP 快照 fb695e2，重装并重启 TRAE | 待查 | screenshots/2026-11-19_0405_21-sandbox-restart-3003.png |
+| 22 | 2026-11-19 04:08 | M2 续接提示词 prompts/06-m2-continue.md，同一任务继续 | 待查 | screenshots/2026-11-19_0408_22-m2-continue.png |
