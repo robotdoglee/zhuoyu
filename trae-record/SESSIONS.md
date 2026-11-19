@@ -40,3 +40,5 @@
 | 36 | 2026-11-19 10:25 | 通过 TRAE 自带部署上线 https://37km306o1q81r6izvma.traesite.cn（公开）；首页、/skills、/project/1 刷新 200，载入示例正常；补了服务端无扩展名路径回退 index.html | 待查 | screenshots/2026-11-19_1025_36-deployed-traesite.png |
 | 37 | 2026-11-19 10:49 | 提示词 12 修复中：拆解卡片详情抽屉已上线可点开；首页一键导入示例排查中 | 待查 | screenshots/2026-11-19_1049_37-fix-cards-drawer-wip.png |
 | 38 | 2026-11-19 11:01 | 提示词 12 完成并重新部署同一站点：拆解卡片可点开详情抽屉（解释、原文依据、公式与关键数字、关联、跳转框图），移动端全屏、Esc 关闭；首页一键载入示例修复；Console 0 error | 待查 | screenshots/2026-11-19_1101_38-fix-cards-example-deployed.png |
+| 39 | 2026-11-19 13:07 | TRAE 网页端只读首测（work.trae.cn）：选定 zhuoyu 仓库，通读项目文档、源码与 trae-record 并结构化汇报；未修改任何文件 | 6afe8408cf2b00967f2f17a9 | — |
+| 40 | 2026-11-19 13:13 | 提示词 13 文档同步（prompts/13-doc-sync.md）：HANDOFF M4.1 完成状态、README 测试数（14 文件 49 用例）与目录清单、App.tsx 页脚文案；分支 trae/agent-iBz2bD，commit f2d3880，验收后已合并 main | 6afe857526b199eb7197cbc8 | — |
