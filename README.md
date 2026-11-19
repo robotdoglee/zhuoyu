@@ -5,7 +5,7 @@
 
 琢玉是一个**本地优先**的论文复现工作台：导入一篇论文，拆解方法、补齐背景、排好计划、记录实验、完成复盘。没有后端，所有业务数据都存在浏览器 IndexedDB 里。
 
-当前进度：**M3 复盘 + 五种本地导出 + 跨项目技能树**。M0 项目骨架、M1 论文拆解与知识框图、M2 计划与实验记录、M3 复盘与成长沉淀均已可用。路线图与验收标准见 [PLAN.md](./PLAN.md)，产品设计见 [DESIGN.md](./DESIGN.md)。
+当前进度：**M4 打磨、双示例与静态部署准备**。M0 项目骨架、M1 论文拆解与知识框图、M2 计划与实验记录、M3 复盘与成长沉淀、M4 示例与体验优化均已可用；本轮不实际上线，部署平台待定。路线图与验收标准见 [PLAN.md](./PLAN.md)，产品设计见 [DESIGN.md](./DESIGN.md)。
 
 ---
 
@@ -49,6 +49,16 @@
 - **跨项目技能树**：只累计已掌握概念，同名概念经空白与大小写归一化后只计一次；保留全部来源项目、来源概念和首次掌握时间，以知识图谱和成长时间线展示，并可回溯到原项目。
 - **M3 示例数据**：Attention 示例现含一份完整复盘初稿、5 条过程记录及 Adam β₂、句对过滤与长度组批 2 条隐藏细节；补充过程幂等执行，不覆盖用户已有复盘。
 
+## 已实现（M4）
+
+- **两份完整离线示例**：首页可一键载入 Attention Is All You Need 或 Deep Residual Learning（ResNet on CIFAR-10）。两者均内置论文元数据、分页文本、九类拆解、知识框图、过程记录、指标与复盘；Attention 含 L2 计划，ResNet 同时提供 L1 跑通与 L2 复现步骤，并包含数据预处理、残差块、权重衰减等复现要点。示例数据不联网，可单独一键重置，不影响其他项目。
+- **统一状态与恢复路径**：通用 `AsyncState` 覆盖首页和五个项目标签的加载、空数据与读取失败状态；空状态给出下一步操作，错误状态提供重试与返回首页。
+- **长列表分页**：拆解要素、普通记事本与隐藏细节超过 200 条后按每页 50 条分页，保留筛选状态并避免一次渲染全部内容。
+- **大 PDF 解析**：超过 100 页时按 10 页一批解析，每批后通过宏任务主动让出主线程；界面显示当前页/总页数并可取消，取消不会保存半成品。
+- **移动端与可访问性**：375px 下首页、五个项目标签、设置和技能树无文档级横向滚动；新建项目、标签切换、检查点和导出控件均可键盘到达，标签支持方向键；按钮、输入、复选框有统一 `:focus-visible` 焦点环，正文和主要按钮对比度不低于 4.5:1。
+- **静态路由回退**：Vite `base` 固定为 `/`，同时提供 `public/_redirects` 与 `public/404.html` 两种 SPA 回退；后者通过 `sessionStorage` 恢复原子路由。
+- **代码质量**：原有 11 个 React 类 lint 警告已清零，新增 ResNet 示例、分页与大 PDF 分批解析测试。
+
 ## 快速开始
 
 要求 Node.js ≥ 20.19（已在 Node 22 验证）。
@@ -57,7 +67,7 @@
 cd app
 npm install
 npm run dev                  # 开发预览，默认 http://localhost:5173
-npm test -- --pool=threads   # Vitest：8 个测试文件、26 条用例
+npm test -- --pool=threads   # Vitest：11 个测试文件、35 条用例
 npm run build                # 类型检查 + 生产构建，输出 app/dist
 npm run lint                 # oxlint 静态检查
 npm run preview              # 预览生产构建
@@ -75,6 +85,8 @@ zhuoyu/
 │   ├── package.json
 │   ├── vite.config.ts         # React 插件；开发环境 arXiv 代理
 │   ├── public/
+│   │   ├── _redirects         # Netlify 类静态托管的 SPA 回退
+│   │   ├── 404.html           # GitHub Pages 类托管的 404 回退
 │   │   └── favicon.svg        # 刻刀破玉图标
 │   └── src/
 │       ├── main.tsx           # 挂载应用；引入霞鹜文楷与全局样式
@@ -95,7 +107,9 @@ zhuoyu/
 │       │   ├── ExportPanel.tsx    # 五种本地导出入口
 │       │   ├── ConceptDialog.tsx  # 概念卡与分层资源编辑/检索
 │       │   ├── PaperSection.tsx   # 论文信息与分页原文预览
-│       │   └── PaperImporter.tsx  # 上传 PDF / arXiv·DOI 检索
+│       │   ├── PaperImporter.tsx  # 上传 PDF / arXiv·DOI 检索、进度与取消
+│       │   ├── AsyncState.tsx     # 统一加载、空状态、错误与恢复操作
+│       │   └── Pagination.tsx     # 长列表分页控件
 │       ├── db/
 │       │   ├── types.ts       # 项目、计划、笔记、指标等数据模型
 │       │   └── db.ts          # Dexie 数据库（zhuoyu, version 4）与增量迁移
@@ -117,7 +131,12 @@ zhuoyu/
 │           ├── graph.ts       # 学习路径与循环检测
 │           ├── resources.ts   # 公开资源检索与分层
 │           ├── example.ts     # Attention 内置示例与 M3 复盘数据
-│           └── *.test.ts      # 关键纯函数与导出单元测试
+│           ├── resnetExample.ts # ResNet on CIFAR-10 内置完整示例
+│           ├── pdf.ts         # PDF 分批解析、进度、取消与主线程让出
+│           ├── pagination.ts  # 200 条阈值与每页 50 条分页
+│           ├── usePagination.ts # 列表页码与筛选重置
+│           ├── labels.ts      # 跨组件共享的掌握度与资源层级标签
+│           └── *.test.ts      # 关键纯函数、示例与导出单元测试
 └── trae-record/               # TRAE 会话截图与使用记录（私有）
 ```
 
@@ -182,12 +201,28 @@ zhuoyu/
 
 ## M3 验收
 
-- `npm run build` 通过；`npm test -- --pool=threads` 共 8 个测试文件、26 条用例全部通过；`npm run lint` 为 0 error、11 个 React 类警告。构建有大 chunk 与第三方 `use no memo` 提示，未作为零警告声明。
+- `npm run build` 通过；`npm test -- --pool=threads` 共 8 个测试文件、26 条用例全部通过。M4 已将当时的 11 个 React 类 lint 警告清零，最新质量门结果见下文。
 - 已按 [PLAN.md](./PLAN.md) 5.2 验收：复盘关键事实与两项 BLEU 指标一致（-1.47% / -1.06%）；五种格式均通过真实浏览器下载并检查文件内容；跨项目同名 `Softmax` 只累计一次、保留两个来源且可分别回溯；Markdown 的 16 条拆解均含页码与引文。
 - 示例导出内容检查：Obsidian ZIP 含 40 篇真实笔记和 151 个双链，缺失目标与旧链接残留均为 0；JSON 为 schema v4 且不含 `apiKey`；Anki CSV 含 BOM、10 张三列卡片；PDF 为 10 页 A4，中文与 Mermaid 框图渲染正常。
 - M0～M2 主路径、隐藏细节新增/取消、计划检查点与刷新持久化均通过；首页和六个工作页面在 375px 下无文档级横向溢出，宽指标表仅在自身容器内滚动。
 - 使用真实 v3 IndexedDB 数据完成 v3 → v4 迁移验收：旧项目、概念、计划、记录、指标和复盘内容保留，新字段默认值正确，迁移后页面可正常渲染。
 - 上述浏览器验收中 Console error、Page Error 和非本机业务请求均为 0。
+
+## M4 使用提示
+
+- 首页「离线示例」区可分别载入 Attention 或 ResNet；再次载入会打开已有示例。点击对应「重置示例」并确认后，只把该示例恢复为内置数据，其他项目不受影响。
+- 大 PDF 上传后会显示逐页进度；超过 100 页时分批让出主线程。点击「取消解析」会中止后续页面并清理临时文档，不保存未完成论文。
+- 拆解、记事本或隐藏细节超过 200 条时，使用底部分页按钮浏览；切换筛选会回到第一页。
+- 键盘按 `Tab` / `Shift+Tab` 在控件间移动，项目标签上用 `←` / `→` 切换；复选框用空格勾选。导出按钮可聚焦并按 Enter 触发，验收时不要在内置浏览器打开系统另存为对话框。
+
+## M4 验收
+
+- `npm run lint`：0 warning、0 error；`npm test -- --pool=threads`：11 个测试文件、35 条用例；`npm run build`：通过，构建包含 `_redirects` 与 `404.html`。
+- 双示例一键载入、五个标签切换与 ResNet 重置已在浏览器走通；101 页 PDF 的分批解析、进度与取消测试通过，取消不保存半成品。
+- 真实 375px Chromium 下，首页、ResNet 五个标签、设置和技能树的 `document` / `body` 宽度均为 375px；宽表格仅在自身容器内滚动。
+- 键盘新建项目、方向键切换标签、勾选检查点和导出控件聚焦通过；未触发系统下载对话框。按钮与输入的 `:focus-visible` 均为 2px 实心焦点环。
+- 对比度实测：正文 `--ink` / `--bg` 为 15.80:1，次级正文 `--ink-soft` / `--bg` 为 6.05:1、在卡片上为 6.32:1，主按钮文字 / 底色为 4.86:1。
+- 首页、设置与技能树浏览器 Console error 为 0；子路由可直接打开。本轮只完成静态部署准备，未部署上线。
 
 ## 技术栈
 
@@ -195,4 +230,10 @@ React 19 · TypeScript · Vite 8 · React Router 7 · Dexie 4（IndexedDB）· p
 
 ## 部署
 
-`npm run build` 产物为纯静态文件（`app/dist`），可放到任意静态托管。由于使用 `BrowserRouter`，部署时需把未知路径回退到 `index.html`（SPA fallback），否则直接刷新 `/project/:id` 会 404。
+`npm run build` 产物为纯静态文件（`app/dist`），Vite `base` 为 `/`。由于使用 `BrowserRouter`，部署时必须把未知路径回退到 `index.html`（SPA fallback），否则直接刷新 `/project/:id` 会 404。仓库同时准备两种通用方案，部署平台待定，本轮未实际上线：
+
+- **支持 `_redirects` 的平台**（如 Netlify、Cloudflare Pages）：构建会带上 `dist/_redirects`，内容为 `/* /index.html 200`，直接把所有未知路径重写到应用入口。
+- **以自定义 404 页回退的平台**（如 GitHub Pages）：构建会带上 `dist/404.html`。未知路径先进入该页，把当前 path、query 与 hash 暂存到 `sessionStorage`，再返回 `/`；`index.html` 内联脚本用 `history.replaceState` 恢复原地址，随后由 React Router 渲染，刷新后仍停留在原子路由。
+- **其他 Nginx / 对象存储**：按平台规则配置 `try_files $uri $uri/ /index.html` 或等价错误页回退；不要同时把 API 或静态资源请求重写到 HTML。
+
+部署后应分别验证首页、直接打开 `/project/:id`、在该地址刷新，以及带 query/hash 的链接。
