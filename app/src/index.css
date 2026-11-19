@@ -7,7 +7,7 @@
   --line: #e6e2d6;
   --primary: #3d3929;
   --primary-soft: #f2efe6;
-  --accent: #b4552f;
+  --accent: #a94c26;
   --accent-hover: #9a411f;
   --accent-soft: #f7ebe4;
   --ok: #4f7044;
@@ -3476,6 +3476,7 @@ button:focus-visible,
 input:focus-visible,
 textarea:focus-visible,
 select:focus-visible,
+summary:focus-visible,
 [role="button"]:focus-visible,
 [tabindex]:focus-visible {
   outline: 2px solid var(--accent) !important;

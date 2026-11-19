@@ -36,3 +36,4 @@
 | 32 | 2026-11-19 07:25 | M4 继续（prompts/09-m4-continue.md）：移动端/可访问性/lint/README | 待查 | screenshots/2026-11-19_0725_32-m4-continue.png |
 | 33 | 2026-11-19 07:54 | TRAE 在 M4 验收（无头 Chromium + tsc）时被系统 OOM 杀掉；代码已落盘：Vitest 35/35、oxlint 0 warning、build 通过 | 待查 | — |
 | 34 | 2026-11-19 08:06 | 重启 TRAE 后发送 M4 收尾 prompt（prompts/10-m4-finish.md）：对比度静态计算、焦点环、终验 | 待查 | screenshots/2026-11-19_0806_34-m4-finish-prompt.png |
+| 35 | 2026-11-19 08:19 | 沙箱重启（TRAE 与 Xvfb 退出）；TRAE 收尾改动已落盘：--accent 调深为 #a94c26、summary 焦点环；复核对比度全部 ≥ 4.5:1，Vitest 35/35、lint 0、build 通过。M4 除实际部署外完成 | 待查 | — |
