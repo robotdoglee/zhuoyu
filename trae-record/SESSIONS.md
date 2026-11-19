@@ -35,3 +35,4 @@
 | 31 | 2026-11-19 07:23 | M4 进行中：ResNet 示例、统一状态组件、分页、101 页 PDF 分批解析完成；代理凭据过期导致 973 中断，重启 chainproxy | 待查 | screenshots/2026-11-19_0724_31-m4-proxy-973.png |
 | 32 | 2026-11-19 07:25 | M4 继续（prompts/09-m4-continue.md）：移动端/可访问性/lint/README | 待查 | screenshots/2026-11-19_0725_32-m4-continue.png |
 | 33 | 2026-11-19 07:54 | TRAE 在 M4 验收（无头 Chromium + tsc）时被系统 OOM 杀掉；代码已落盘：Vitest 35/35、oxlint 0 warning、build 通过 | 待查 | — |
+| 34 | 2026-11-19 08:06 | 重启 TRAE 后发送 M4 收尾 prompt（prompts/10-m4-finish.md）：对比度静态计算、焦点环、终验 | 待查 | screenshots/2026-11-19_0806_34-m4-finish-prompt.png |
