@@ -9,6 +9,7 @@ import type {
   ResourceLink,
 } from '../db/types'
 import { verifyAnchor } from './anchors'
+import { backfillExampleDetails } from './exampleDetails'
 import { deleteProjectData } from './projectData'
 
 export const RESNET_EXAMPLE_PROJECT_TITLE = 'Deep Residual Learning（ResNet on CIFAR-10）'
@@ -154,6 +155,12 @@ export interface ResnetExampleElement {
   value: string
   quote: string
   page: number
+  detail: string
+  section: string
+  formula?: string
+  keyNumbers?: string[]
+  relatedLabels?: string[]
+  relatedConceptNames?: string[]
 }
 
 export const RESNET_EXAMPLE_ELEMENTS: ResnetExampleElement[] = [
@@ -163,6 +170,12 @@ export const RESNET_EXAMPLE_ELEMENTS: ResnetExampleElement[] = [
     value: '在 10 类 CIFAR-10 上复现 ResNet 深度对照实验，以测试集分类错误率为核心指标。',
     quote: 'The CIFAR-10 dataset consists of 50,000 training images and 10,000 testing images in 10 classes.',
     page: 7,
+    section: '4.2 CIFAR-10 and Analysis',
+    detail:
+      'CIFAR-10 是论文验证极深网络的主战场。复现目标是同一套训练配置下比较 ResNet-20/56/110 的测试错误率，而不是追求新的 SOTA；因此数据划分、增强和评测都必须固定。',
+    keyNumbers: ['10 类', '50,000 训练图', '10,000 测试图'],
+    relatedLabels: ['CIFAR-10 数据划分', 'ResNet-20 测试错误率'],
+    relatedConceptNames: ['分类错误率'],
   },
   {
     type: 'dataset',
@@ -170,6 +183,12 @@ export const RESNET_EXAMPLE_ELEMENTS: ResnetExampleElement[] = [
     value: '训练集 50,000 张、测试集 10,000 张；原实验另用 45k/5k 训练验证划分确定学习率节点。',
     quote: 'The CIFAR-10 dataset consists of 50,000 training images and 10,000 testing images in 10 classes.',
     page: 7,
+    section: '4.2 CIFAR-10 and Analysis',
+    detail:
+      '论文用 45k/5k 的训练/验证划分来确定 32k、48k 学习率节点，测试集不参与任何选择。复现时要保留这份划分或明确说明替代方案，否则学习率转折点会失去依据。',
+    keyNumbers: ['50,000 / 10,000', '45k / 5k 划分'],
+    relatedLabels: ['CIFAR-10 图像分类', '简单数据增强'],
+    relatedConceptNames: ['CIFAR 数据增强', '分类错误率'],
   },
   {
     type: 'dataset',
@@ -177,6 +196,13 @@ export const RESNET_EXAMPLE_ELEMENTS: ResnetExampleElement[] = [
     value: '每边填充 4 像素，再随机裁剪 32×32 并随机水平翻转；测试只评估原始单视图。',
     quote: 'We follow the simple data augmentation in [24] for training: 4 pixels are padded on each side, and a 32×32 crop is randomly sampled from the padded image or its horizontal flip.',
     page: 8,
+    section: '4.2 CIFAR-10 and Analysis',
+    detail:
+      '训练增强只在训练阶段启用，测试使用原始 32×32 单视图。复现时要分别固化 train/test transform，并保存一个固定 batch 的快照做对照，避免测试阶段误用随机增强。',
+    formula: '32×32 图像 → 四周 pad 4 → 随机裁剪 32×32 → 随机水平翻转',
+    keyNumbers: ['pad = 4 像素', 'crop = 32×32'],
+    relatedLabels: ['CIFAR-10 数据划分'],
+    relatedConceptNames: ['CIFAR 数据增强'],
   },
   {
     type: 'architecture',
@@ -184,6 +210,13 @@ export const RESNET_EXAMPLE_ELEMENTS: ResnetExampleElement[] = [
     value: '堆叠层学习相对输入的残差，而不是直接逼近无参照映射； shortcut 将输入与残差逐元素相加。',
     quote: 'The original function thus becomes F(x) + x.',
     page: 3,
+    section: '3.1 Residual Learning',
+    detail:
+      '残差学习的核心是把目标映射 H(x) 改写成 F(x)+x，让网络只需学习「相对输入的修正量」。这样恒等映射更容易优化，深层网络至少不会比浅层更差。复现时要确认 shortcut 加回的是 block 输入，而不是某一中间层输出。',
+    formula: 'F(x) := H(x) − x,  H(x) = F(x) + x',
+    keyNumbers: ['1 条恒等支路'],
+    relatedLabels: ['恒等与投影 shortcut'],
+    relatedConceptNames: ['残差学习', '恒等 shortcut'],
   },
   {
     type: 'architecture',
@@ -191,6 +224,13 @@ export const RESNET_EXAMPLE_ELEMENTS: ResnetExampleElement[] = [
     value: '32/16/8 三档特征图各含 2n 层 3×3 卷积，通道数为 16/32/64，总计 6n+2 个加权层。',
     quote: 'The network ends with a global average pooling, a 10-way fully-connected layer, and softmax. There are totally 6n+2 stacked weighted layers.',
     page: 7,
+    section: '4.2 CIFAR-10 and Analysis',
+    detail:
+      'CIFAR ResNet 的结构可以用 6n+2 统一描述：首层 3×3 卷积，三组 stage 各 2n 层，最后接全局平均池化与 10 类全连接。复现时应打印逐层 shape 和参数量，确认 stage 切换处的 stride 与通道翻倍。',
+    formula: '总加权层数 = 6n + 2，通道 = 16 / 32 / 64',
+    keyNumbers: ['6n + 2 层', '16/32/64 通道', '32/16/8 特征图'],
+    relatedLabels: ['恒等与投影 shortcut', 'ResNet-20 测试错误率'],
+    relatedConceptNames: ['参数量与 FLOPs', '恒等 shortcut'],
   },
   {
     type: 'architecture',
@@ -198,6 +238,13 @@ export const RESNET_EXAMPLE_ELEMENTS: ResnetExampleElement[] = [
     value: '维度增加时，方案 A 用零填充恒等映射，方案 B 用 1×1 卷积投影；跨尺寸时步长为 2。',
     quote: 'For both options, when the shortcuts go through feature maps of two sizes, they are performed with a stride of 2.',
     page: 8,
+    section: '4.2 CIFAR-10 and Analysis',
+    detail:
+      '方案 A 不增加参数，用零通道补齐维度；方案 B 用 1×1 卷积学习投影。CIFAR 主实验主要使用方案 A，复现时若误用框架默认投影 shortcut，参数量会变化，主表对照就失去意义。',
+    formula: 'y = F(x, {Wᵢ}) + x（维度一致时）',
+    keyNumbers: ['方案 A / B', 'stride = 2'],
+    relatedLabels: ['残差学习 F(x)+x', 'CIFAR 三组残差阶段'],
+    relatedConceptNames: ['恒等 shortcut', '投影 shortcut', '参数量与 FLOPs'],
   },
   {
     type: 'training',
@@ -205,6 +252,13 @@ export const RESNET_EXAMPLE_ELEMENTS: ResnetExampleElement[] = [
     value: '每个卷积之后、激活之前使用 Batch Normalization，并采用 He 初始化，不使用 dropout。',
     quote: 'The weights are initialized as in [13], and Batch Normalization (BN) [16] is used after each convolution and before activation.',
     page: 8,
+    section: '4.2 CIFAR-10 and Analysis',
+    detail:
+      '顺序是 conv → BN → ReLU，shortcut 相加后还会再经过 ReLU。训练与推理阶段的 BN running statistics 行为不同，复现时要确认冻结/更新策略，并记录是否使用 dropout（论文明确不用）。',
+    formula: 'ReLU(BN(Conv(x)))',
+    keyNumbers: ['dropout = 0'],
+    relatedLabels: ['SGD、batch 与正则化'],
+    relatedConceptNames: ['Batch Normalization', 'He 初始化'],
   },
   {
     type: 'training',
@@ -212,6 +266,13 @@ export const RESNET_EXAMPLE_ELEMENTS: ResnetExampleElement[] = [
     value: '深层 CIFAR ResNet 前 400 次迭代使用 0.01，再恢复 0.1，以缓解初始训练不稳定。',
     quote: 'For the first 400 iterations we use a learning rate of 0.01 and then turn back to 0.1, although this is not necessary for shallower ResNets.',
     page: 8,
+    section: '4.2 CIFAR-10 and Analysis',
+    detail:
+      '这是论文里容易被忽略的细节：深层网络初始阶段先用较小学习率，400 步后回到 0.1。若复现 ResNet-110 时出现 NaN 或 loss 突增，应优先检查这段预热是否实现。',
+    formula: 'lr = 0.01 (step < 400), 否则 0.1',
+    keyNumbers: ['400 次迭代', '0.01 → 0.1'],
+    relatedLabels: ['64k 迭代学习率计划'],
+    relatedConceptNames: ['学习率阶梯衰减'],
   },
   {
     type: 'hyperparam',
@@ -219,6 +280,13 @@ export const RESNET_EXAMPLE_ELEMENTS: ResnetExampleElement[] = [
     value: 'mini-batch 128，两张 GPU，momentum 0.9，weight decay 0.0001，不使用 dropout。',
     quote: 'We use a weight decay of 0.0001 and momentum of 0.9, and adopt the weight initialization and BN but with no dropout.',
     page: 8,
+    section: '4.2 CIFAR-10 and Analysis',
+    detail:
+      '这些是训练口径的一部分，不是可以随意替换的默认值。单卡复现时若用梯度累积模拟 batch 128，要保证 BN 统计量对应等效 batch，或明确记录差异。',
+    formula: 'SGD(momentum=0.9, weight_decay=1e−4)',
+    keyNumbers: ['batch = 128', 'momentum = 0.9', 'weight decay = 1e−4'],
+    relatedLabels: ['卷积—BN—激活顺序', '64k 迭代学习率计划'],
+    relatedConceptNames: ['SGD 与动量'],
   },
   {
     type: 'hyperparam',
@@ -226,6 +294,13 @@ export const RESNET_EXAMPLE_ELEMENTS: ResnetExampleElement[] = [
     value: '初始学习率 0.1，在 32k 与 48k 迭代各除以 10，64k 结束；深层网络另有 400 次预热。',
     quote: 'We start with a learning rate of 0.1, divide it by 10 at 32k and 48k iterations, and terminate training at 64k iterations, which is determined on a 45k/5k train/val split.',
     page: 8,
+    section: '4.2 CIFAR-10 and Analysis',
+    detail:
+      '32k、48k、64k 都是 optimizer step，不是 epoch。复现时要确保 scheduler 每次参数更新后前进一步；若按 epoch 衰减，实际学习率曲线会完全不同。',
+    formula: 'lr = 0.1 → 0.01 @32k → 0.001 @48k → 结束 @64k',
+    keyNumbers: ['0.1', '32k / 48k', '64k 迭代'],
+    relatedLabels: ['深层学习率预热', 'SGD、batch 与正则化'],
+    relatedConceptNames: ['学习率阶梯衰减', 'SGD 与动量'],
   },
   {
     type: 'metric',
@@ -233,6 +308,12 @@ export const RESNET_EXAMPLE_ELEMENTS: ResnetExampleElement[] = [
     value: '论文主表 ResNet-20 为 8.75%，参数量 0.27M，是短跑后最先对齐的基础指标。',
     quote: 'ResNet-20 0.27M 8.75',
     page: 9,
+    section: 'Table 6 · CIFAR-10 test error',
+    detail:
+      'ResNet-20 是最浅的 CIFAR 对照，训练成本最低，适合先验证数据、增强和评测流程。若这一项偏差很大，不应直接开始训练 56/110。',
+    keyNumbers: ['8.75%', '0.27M 参数'],
+    relatedLabels: ['ResNet-56 / 110 测试错误率', 'CIFAR 三组残差阶段'],
+    relatedConceptNames: ['分类错误率', '参数量与 FLOPs'],
   },
   {
     type: 'metric',
@@ -240,6 +321,12 @@ export const RESNET_EXAMPLE_ELEMENTS: ResnetExampleElement[] = [
     value: '论文 ResNet-56 为 6.97%，ResNet-110 为 6.43%；复现应同时记录单次值和多次运行波动。',
     quote: 'ResNet-56 0.85M 6.97',
     page: 9,
+    section: 'Table 6 · CIFAR-10 test error',
+    detail:
+      '56 与 110 层是论文展示「更深更好」的主要证据。复现时除了单次结果，还应至少重复三次并报告均值、标准差和极值，避免把随机波动当成方法差异。',
+    keyNumbers: ['6.97%（56 层）', '6.43%（110 层）', '0.85M / 1.7M'],
+    relatedLabels: ['ResNet-20 测试错误率', '层响应与千层网络分析'],
+    relatedConceptNames: ['分类错误率', '参数量与 FLOPs'],
   },
   {
     type: 'compute',
@@ -247,6 +334,12 @@ export const RESNET_EXAMPLE_ELEMENTS: ResnetExampleElement[] = [
     value: 'CIFAR 实验使用两张 GPU 和 batch size 128；改变设备或等效 batch 时应记录缩放策略。',
     quote: 'These models are trained with a mini-batch size of 128 on two GPUs.',
     page: 8,
+    section: '4.2 CIFAR-10 and Analysis',
+    detail:
+      '论文只说明使用两张 GPU，没有给出单卡 batch 分配。复现时若使用单卡 batch 128，训练语义基本一致；若改用梯度累积，应记录 BN 与学习率的对应关系。',
+    keyNumbers: ['2 张 GPU', 'batch = 128'],
+    relatedLabels: ['SGD、batch 与正则化'],
+    relatedConceptNames: ['SGD 与动量', 'Batch Normalization'],
   },
   {
     type: 'code',
@@ -254,6 +347,12 @@ export const RESNET_EXAMPLE_ELEMENTS: ResnetExampleElement[] = [
     value: '作者原始实现与模型入口为 KaimingHe/deep-residual-networks；示例使用固定提交的 PyTorch 复现做对照。',
     quote: 'Deep Residual Learning for Image Recognition',
     page: 1,
+    section: 'Title',
+    detail:
+      '论文本身没有在正文给出代码链接，作者仓库是常见入口。复现时应固定 commit，并优先核对 shortcut 类型、BN 位置和数据集预处理，而不是直接套用框架默认 ResNet。',
+    keyNumbers: ['1 个官方仓库'],
+    relatedLabels: ['恒等与投影 shortcut', 'CIFAR 三组残差阶段'],
+    relatedConceptNames: ['恒等 shortcut', 'Batch Normalization'],
   },
   {
     type: 'supplement',
@@ -261,6 +360,12 @@ export const RESNET_EXAMPLE_ELEMENTS: ResnetExampleElement[] = [
     value: '补充观察显示 ResNet 响应通常更小；1202 层可低训练误差但测试误差 7.93%，不能只看深度。',
     quote: 'ResNet-1202 19.4M 7.93',
     page: 9,
+    section: 'Table 6 · CIFAR-10 test error',
+    detail:
+      '1202 层训练误差低于 0.1%，但测试误差 7.93%，说明极深网络仍有优化与正则化问题。复现时若只追求更深层数而不控制过拟合，结果可能反而变差。',
+    keyNumbers: ['1202 层', '19.4M 参数', '7.93%'],
+    relatedLabels: ['ResNet-56 / 110 测试错误率'],
+    relatedConceptNames: ['参数量与 FLOPs', '分类错误率'],
   },
 ]
 
@@ -428,7 +533,10 @@ export async function loadResnetExampleProject(
       await deleteProjectData(existing.id)
       existing = undefined
     }
-    if (existing?.id !== undefined) return { projectId: existing.id, existing: true }
+    if (existing?.id !== undefined) {
+      await backfillExampleDetails(existing.id, RESNET_EXAMPLE_ELEMENTS)
+      return { projectId: existing.id, existing: true }
+    }
 
     const now = Date.now()
     const projectId = await db.projects.add({

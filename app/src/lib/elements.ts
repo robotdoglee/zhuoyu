@@ -1,4 +1,4 @@
-import type { Element, ElementType, TextChunk } from '../db/types'
+import type { Concept, Element, ElementType, TextChunk } from '../db/types'
 import { normalizeQuote } from './anchors'
 
 export const ELEMENT_TYPE_META: Array<{ type: ElementType; label: string; hint: string }> = [
@@ -17,7 +17,20 @@ export function elementTypeLabel(type: ElementType): string {
   return ELEMENT_TYPE_META.find((item) => item.type === type)?.label ?? type
 }
 
-export type ElementDraft = Pick<Element, 'type' | 'label' | 'value' | 'quote' | 'page'> & {
+export type ElementDraft = Pick<
+  Element,
+  | 'type'
+  | 'label'
+  | 'value'
+  | 'quote'
+  | 'page'
+  | 'detail'
+  | 'section'
+  | 'formula'
+  | 'keyNumbers'
+  | 'relatedLabels'
+  | 'relatedConceptNames'
+> & {
   source: 'llm' | 'heuristic'
 }
 
@@ -59,6 +72,8 @@ export function extractHeuristically(chunks: TextChunk[]): ElementDraft[] {
         value: matchedValue.slice(0, 220),
         quote,
         page: chunk.page,
+        section: sectionAround(chunk.text, match.index),
+        keyNumbers: keyNumbersFrom(line),
         source: 'heuristic',
       })
     }
@@ -81,4 +96,52 @@ function quoteAround(text: string, index: number, matchLength: number): string {
     end = index + matchLength + boundary + (boundary === rightPeriod ? 1 : 1)
   }
   return text.slice(start, end).trim().slice(0, 420)
+}
+
+/** 从命中位置向前找最近的章节标题，例如「3.2.2 Multi-Head Attention」。 */
+export function sectionAround(text: string, index: number): string | undefined {
+  const lineStart = text.lastIndexOf('\n', Math.max(0, index - 1)) + 1
+  const lineEnd = text.indexOf('\n', index)
+  const currentLine = text.slice(lineStart, lineEnd === -1 ? text.length : lineEnd).trim()
+  if (isHeadingLine(currentLine)) return currentLine
+
+  const lines = text.slice(0, lineStart).split('\n').slice(-14).reverse()
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (isHeadingLine(trimmed)) return trimmed
+  }
+  return undefined
+}
+
+function isHeadingLine(line: string): boolean {
+  return line.length >= 3 && line.length <= 90 && /^\d+(?:\.\d+)*\.?\s+[A-Z\u4e00-\u9fa5]/.test(line)
+}
+
+/** 从文本中提取至多 6 个带单位或特殊符号的关键数字，用于详情面板。 */
+export function keyNumbersFrom(text: string): string[] {
+  const matches = text.match(/\b\d+(?:[.,]\d+)?(?:\s*(?:%|×|k|K|M|B|万|亿|小时|天|步|层|头|页))?/g) ?? []
+  const seen = new Set<string>()
+  const output: string[] = []
+  for (const raw of matches) {
+    const value = raw.trim()
+    if (!value || seen.has(value)) continue
+    seen.add(value)
+    output.push(value)
+    if (output.length >= 6) break
+  }
+  return output
+}
+
+/** 按 label 解析卡片之间的人工关联，忽略已被删除或指向自身的条目。 */
+export function relatedElementsOf(element: Element, all: Element[]): Element[] {
+  const labels = new Set(element.relatedLabels ?? [])
+  if (labels.size === 0) return []
+  return all.filter((item) => item.id !== element.id && labels.has(item.label))
+}
+
+/** 按名称解析关联知识点，名称需与概念卡片的 name 完全一致。 */
+export function relatedConceptsOf(element: Element, concepts: Concept[]): Concept[] {
+  const names = new Set(element.relatedConceptNames ?? [])
+  if (names.size === 0) return []
+  return concepts.filter((concept) => names.has(concept.name))
 }

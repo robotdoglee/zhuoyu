@@ -82,6 +82,8 @@ export default function ProjectPage() {
   const [paper, setPaper] = useState<Paper | undefined>(undefined)
   const [activeTab, setActiveTab] = useState<TabId>(() => TABS.some((tab) => tab.id === requestedTab) ? requestedTab as TabId : 'breakdown')
   const [sourceRequest, setSourceRequest] = useState<{ page: number; quote?: string; nonce: number }>()
+  const [mapFocus, setMapFocus] = useState<{ conceptId?: number; nonce: number }>()
+  const [planFocus, setPlanFocus] = useState<{ conceptId?: number; nonce: number }>()
 
   const load = useCallback(async () => {
     setStatus('loading')
@@ -118,6 +120,22 @@ export default function ProjectPage() {
     setSourceRequest({ page, quote, nonce: Date.now() })
     window.requestAnimationFrame(() => {
       document.getElementById('paper-source')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+  }
+
+  function openMapConcept(conceptId: number) {
+    setMapFocus({ conceptId, nonce: Date.now() })
+    setActiveTab('map')
+    window.requestAnimationFrame(() => {
+      document.getElementById('project-panel-map')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+  }
+
+  function openPlanStep(conceptId?: number) {
+    setPlanFocus({ conceptId, nonce: Date.now() })
+    setActiveTab('plan')
+    window.requestAnimationFrame(() => {
+      document.getElementById('project-panel-plan')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     })
   }
 
@@ -207,11 +225,26 @@ export default function ProjectPage() {
         aria-labelledby={`project-tab-${active.id}`}
       >
         {activeTab === 'breakdown' ? (
-          <BreakdownPanel projectId={project.id ?? numericId} paper={paper} onShowSource={showSource} />
+          <BreakdownPanel
+            projectId={project.id ?? numericId}
+            paper={paper}
+            onShowSource={showSource}
+            onOpenConcept={openMapConcept}
+            onOpenPlan={openPlanStep}
+          />
         ) : activeTab === 'map' ? (
-          <KnowledgeMap projectId={project.id ?? numericId} />
+          <KnowledgeMap
+            projectId={project.id ?? numericId}
+            focusConceptId={mapFocus?.conceptId}
+            focusNonce={mapFocus?.nonce}
+          />
         ) : activeTab === 'plan' ? (
-          <PlanPanel project={project} onOpenNotebook={() => setActiveTab('notebook')} />
+          <PlanPanel
+            project={project}
+            focusConceptId={planFocus?.conceptId}
+            focusNonce={planFocus?.nonce}
+            onOpenNotebook={() => setActiveTab('notebook')}
+          />
         ) : activeTab === 'notebook' ? (
           <>
             <NotebookPanel projectId={project.id ?? numericId} onOpenPlan={() => setActiveTab('plan')} />

@@ -24,6 +24,21 @@ describe('ResNet on CIFAR-10 内置示例', () => {
     }
   })
 
+  it('每条拆解都带有详情、章节和可解析的关联', () => {
+    const labels = new Set(RESNET_EXAMPLE_ELEMENTS.map((element) => element.label))
+    const conceptNames = new Set(RESNET_EXAMPLE_CONCEPTS.map((concept) => concept.name))
+    for (const element of RESNET_EXAMPLE_ELEMENTS) {
+      expect(element.detail.length, element.label).toBeGreaterThan(20)
+      expect(element.section.length, element.label).toBeGreaterThan(0)
+      for (const label of element.relatedLabels ?? []) {
+        expect(labels.has(label), `${element.label} → ${label}`).toBe(true)
+      }
+      for (const name of element.relatedConceptNames ?? []) {
+        expect(conceptNames.has(name), `${element.label} → ${name}`).toBe(true)
+      }
+    }
+  })
+
   it('知识框图引用完整且没有环', () => {
     const names = new Set(RESNET_EXAMPLE_CONCEPTS.map((concept) => concept.name))
     const visiting = new Set<string>()

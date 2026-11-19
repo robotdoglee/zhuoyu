@@ -33,10 +33,12 @@ const MASTERY_LABEL: Record<Mastery, string> = { known: '会', half: '半会', u
 
 interface PlanPanelProps {
   project: Project
+  focusConceptId?: number
+  focusNonce?: number
   onOpenNotebook: () => void
 }
 
-export default function PlanPanel({ project, onOpenNotebook }: PlanPanelProps) {
+export default function PlanPanel({ project, focusConceptId, focusNonce, onOpenNotebook }: PlanPanelProps) {
   const projectId = project.id as number
   const [steps, setSteps] = useState<PlanStep[]>([])
   const [concepts, setConcepts] = useState<Concept[]>([])
@@ -84,6 +86,22 @@ export default function PlanPanel({ project, onOpenNotebook }: PlanPanelProps) {
   }, [load])
 
   const groups = useMemo(() => groupByMilestone(steps), [steps])
+  const focusStepId = useMemo(() => {
+    if (focusConceptId === undefined) return undefined
+    return steps.find((step) => step.conceptIds.includes(focusConceptId))?.id
+  }, [focusConceptId, steps])
+
+  useEffect(() => {
+    if (focusConceptId === undefined) return
+    const timer = window.setTimeout(() => {
+      const targetId = focusStepId ?? steps[0]?.id
+      if (targetId === undefined) return
+      const node = document.getElementById(`plan-step-${targetId}`)
+      node?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      node?.focus()
+    }, 180)
+    return () => window.clearTimeout(timer)
+  }, [focusConceptId, focusNonce, focusStepId, steps])
   const doneCount = steps.filter((step) => step.status === 'done').length
   const totalMinutes = steps.reduce((sum, step) => sum + (step.estimatedMinutes ?? 0), 0)
   const currentVersion = steps[0]?.version ?? 0
@@ -282,7 +300,9 @@ export default function PlanPanel({ project, onOpenNotebook }: PlanPanelProps) {
                 <div className="plan-step-list">
                   {group.steps.map((step) => (
                     <article
-                      className={`plan-step status-${step.status} ${draggedId === step.id ? 'dragging' : ''}`}
+                      id={step.id === undefined ? undefined : `plan-step-${step.id}`}
+                      tabIndex={-1}
+                      className={`plan-step status-${step.status} ${draggedId === step.id ? 'dragging' : ''} ${focusStepId === step.id ? 'focused' : ''}`}
                       key={step.id}
                       onDragOver={(event) => event.preventDefault()}
                       onDrop={(event) => {

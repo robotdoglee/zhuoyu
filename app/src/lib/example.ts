@@ -1,13 +1,14 @@
 import { db } from '../db/db'
 import type { Concept, ElementType, NoteEntry, PaperPage, ResourceLink } from '../db/types'
 import { verifyAnchor } from './anchors'
+import { backfillExampleDetails } from './exampleDetails'
 import { buildRetrospectiveDraft } from './retrospective'
 import { deleteProjectData, loadProjectBundle } from './projectData'
 
 const EXAMPLE_PROJECT_TITLE = 'Attention Is All You Need（L2 复现）'
 const ARXIV_URL = 'https://arxiv.org/abs/1706.03762'
 
-const EXAMPLE_PAGES: PaperPage[] = [
+export const EXAMPLE_PAGES: PaperPage[] = [
   {
     page: 1,
     text: [
@@ -138,9 +139,15 @@ interface ExampleElement {
   value: string
   quote: string
   page: number
+  detail: string
+  section: string
+  formula?: string
+  keyNumbers?: string[]
+  relatedLabels?: string[]
+  relatedConceptNames?: string[]
 }
 
-const EXAMPLE_ELEMENTS: ExampleElement[] = [
+export const EXAMPLE_ELEMENTS: ExampleElement[] = [
   {
     type: 'task',
     label: '机器翻译序列转导',
@@ -148,6 +155,12 @@ const EXAMPLE_ELEMENTS: ExampleElement[] = [
     quote:
       'Experiments on two machine translation tasks show these models to be superior in quality while being more parallelizable and requiring significantly less time to train.',
     page: 1,
+    section: 'Abstract',
+    detail:
+      '这篇论文的目标不是发明新任务，而是证明「只靠注意力」也能做好序列转导。复现时要先锁定英德翻译这一主任务，英法作为旁证；评价必须使用同一个评测脚本和分词口径，否则 BLEU 差异无法解释。',
+    keyNumbers: ['2 个翻译任务', 'WMT 2014'],
+    relatedLabels: ['编码器—解码器框架', 'Base 模型英德 BLEU'],
+    relatedConceptNames: ['Encoder-Decoder', '自注意力', 'BLEU'],
   },
   {
     type: 'dataset',
@@ -155,6 +168,12 @@ const EXAMPLE_ELEMENTS: ExampleElement[] = [
     value: '使用标准 WMT 2014 英德数据，约 450 万句对；复现时需固定数据版本、预处理和划分。',
     quote: 'We trained on the standard WMT 2014 English-German dataset consisting of about 4.5 million sentence pairs.',
     page: 5,
+    section: '5.1 Training Data and Batching',
+    detail:
+      '450 万句对是训练规模的核心数字，但论文没有给出数据下载快照。复现时应记录数据来源、清洗规则、训练/验证/测试划分，并确认 newstest2014 只用于最终评测。',
+    keyNumbers: ['约 4.5M 句对'],
+    relatedLabels: ['共享 BPE 词表', '按长度组织大批量训练'],
+    relatedConceptNames: ['BPE 分词', 'BLEU'],
   },
   {
     type: 'dataset',
@@ -163,6 +182,12 @@ const EXAMPLE_ELEMENTS: ExampleElement[] = [
     quote:
       'Sentences were encoded using byte-pair encoding, which has a shared source-target vocabulary of about 37000 tokens.',
     page: 5,
+    section: '5.1 Training Data and Batching',
+    detail:
+      '共享词表意味着源语言和目标语言共用同一套子词单元。复现时若换成各自独立的词表，词表大小、嵌入层形状和 BLEU 都会变化；训练与评测必须复用同一份 BPE 模型。',
+    keyNumbers: ['约 37,000 token'],
+    relatedLabels: ['WMT14 英德训练集'],
+    relatedConceptNames: ['BPE 分词', 'BLEU'],
   },
   {
     type: 'architecture',
@@ -170,6 +195,11 @@ const EXAMPLE_ELEMENTS: ExampleElement[] = [
     value: '保留编码器—解码器总体框架，但两侧都以堆叠自注意力和逐位置全连接层替代循环结构。',
     quote: 'Most competitive neural sequence transduction models have an encoder-decoder structure.',
     page: 2,
+    section: '3 Model Architecture',
+    detail:
+      'Transformer 并没有抛弃编码器—解码器范式，而是替换了其中的循环与卷积。理解数据如何从编码器流向解码器、交叉注意力在何处读取编码器输出，是后续实现多头注意力的前提。',
+    relatedLabels: ['六层编码器与残差归一化', '八头注意力'],
+    relatedConceptNames: ['Encoder-Decoder', '自注意力'],
   },
   {
     type: 'architecture',
@@ -178,6 +208,13 @@ const EXAMPLE_ELEMENTS: ExampleElement[] = [
     quote:
       'The encoder is composed of a stack of N = 6 identical layers. Each layer has two sub-layers. The first is a multi-head self-attention mechanism, and the second is a simple, position-wise fully connected feed-forward network. We employ a residual connection around each of the two sub-layers, followed by layer normalization.',
     page: 3,
+    section: '3.1 Encoder and Decoder Stacks',
+    detail:
+      '复现时最容易出错的是子层顺序：先做子层计算，再与输入相加，最后 LayerNorm。层数 N=6 同时适用于编码器与解码器，Base 与 Big 的差别主要在宽度、头数和前馈维度。',
+    formula: 'y = LayerNorm(x + Sublayer(x))',
+    keyNumbers: ['N = 6', '每层 2 个子层'],
+    relatedLabels: ['八头注意力', '残差 Dropout 正则化'],
+    relatedConceptNames: ['多头注意力', '残差与 LayerNorm'],
   },
   {
     type: 'architecture',
@@ -185,6 +222,13 @@ const EXAMPLE_ELEMENTS: ExampleElement[] = [
     value: '使用 8 个并行注意力头，在不同表示子空间学习位置间关系，再拼接并投影各头输出。',
     quote: 'In this work we employ h = 8 parallel attention layers, or heads.',
     page: 4,
+    section: '3.2.2 Multi-Head Attention',
+    detail:
+      '多头不是简单复制 8 份相同注意力，而是先把 Q/K/V 投影到 8 组低维子空间，分别计算后再拼接投影。复现时需核对每个头的维度 d_k = d_v = d_model / h，否则张量形状会对不上。',
+    formula: 'MultiHead(Q,K,V) = Concat(head₁,…,head₈) Wᴼ',
+    keyNumbers: ['h = 8'],
+    relatedLabels: ['六层编码器与残差归一化'],
+    relatedConceptNames: ['多头注意力', '自注意力', 'Softmax'],
   },
   {
     type: 'training',
@@ -193,6 +237,12 @@ const EXAMPLE_ELEMENTS: ExampleElement[] = [
     quote:
       'Sentence pairs were batched together by approximate sequence length. Each training batch contained a set of sentence pairs containing approximately 25000 source tokens and 25000 target tokens.',
     page: 5,
+    section: '5.1 Training Data and Batching',
+    detail:
+      '按 token 数而不是句对数组批，能减少 padding 浪费并稳定显存。复现时要记录排序窗口、shuffle 方式和每个 batch 的 padding 策略，否则有效 batch 大小会漂移。',
+    keyNumbers: ['约 25,000 源 token', '约 25,000 目标 token'],
+    relatedLabels: ['WMT14 英德训练集'],
+    relatedConceptNames: ['BPE 分词'],
   },
   {
     type: 'training',
@@ -201,6 +251,13 @@ const EXAMPLE_ELEMENTS: ExampleElement[] = [
     quote:
       'Residual Dropout We apply dropout to the output of each sub-layer, before it is added to the sub-layer input and normalized.',
     page: 6,
+    section: '5.4 Regularization',
+    detail:
+      'Dropout 的位置在残差相加之前，而不是归一化之后。Base 模型使用 0.1；Big 模型通常更低。若把 dropout 放在错误位置，训练损失可能正常但最终 BLEU 会偏低。',
+    formula: 'y = LayerNorm(x + Dropout(Sublayer(x)))',
+    keyNumbers: ['Pdrop = 0.1（Base）'],
+    relatedLabels: ['标签平滑', '六层编码器与残差归一化'],
+    relatedConceptNames: ['残差与 LayerNorm', '标签平滑'],
   },
   {
     type: 'training',
@@ -209,6 +266,13 @@ const EXAMPLE_ELEMENTS: ExampleElement[] = [
     quote:
       'Label Smoothing During training, we employed label smoothing of value ϵls = 0.1. This hurts perplexity, as the model learns to be more unsure, but improves accuracy and BLEU score.',
     page: 6,
+    section: '5.4 Regularization',
+    detail:
+      '标签平滑把一部分概率质量均分给非目标类别，降低模型过度自信。复现时要注意它同时影响训练损失与困惑度，因此不能用困惑度直接判断是否「对齐论文」。',
+    formula: 'q′(k) = (1 − ε)·δ(k, y) + ε / K',
+    keyNumbers: ['εls = 0.1'],
+    relatedLabels: ['残差 Dropout 正则化', 'Base 模型英德 BLEU'],
+    relatedConceptNames: ['标签平滑', 'Softmax', 'BLEU'],
   },
   {
     type: 'hyperparam',
@@ -216,6 +280,13 @@ const EXAMPLE_ELEMENTS: ExampleElement[] = [
     value: '采用 Adam，β₁=0.9、β₂=0.98、ϵ=10⁻⁹，复现时应避免沿用框架默认参数。',
     quote: 'We used the Adam optimizer with β1 = 0.9, β2 = 0.98 and ϵ = 10−9.',
     page: 6,
+    section: '5.3 Optimizer',
+    detail:
+      '框架默认 β₂ 通常是 0.999，而论文使用 0.98，这是最常见的隐藏偏差来源。复现时应在配置中显式写入三个参数，并用配置 diff 或单元测试锁定。',
+    formula: 'β₁ = 0.9, β₂ = 0.98, ϵ = 10⁻⁹',
+    keyNumbers: ['β₁ = 0.9', 'β₂ = 0.98', 'ϵ = 10⁻⁹'],
+    relatedLabels: ['学习率预热与衰减'],
+    relatedConceptNames: ['Adam 与学习率预热'],
   },
   {
     type: 'hyperparam',
@@ -224,6 +295,13 @@ const EXAMPLE_ELEMENTS: ExampleElement[] = [
     quote:
       'This corresponds to increasing the learning rate linearly for the first warmup_steps training steps, and decreasing it thereafter proportionally to the inverse square root of the step number. We used warmup_steps = 4000.',
     page: 6,
+    section: '5.3 Optimizer',
+    detail:
+      '学习率是 step 的函数，不是 epoch 的函数。复现时要确认 scheduler 在每次 optimizer step 后更新，并统一 warmup 的计数起点；否则 4,000 步预热会产生完全不同的前期曲线。',
+    formula: 'lr = d_model^(−0.5) · min(step^(−0.5), step · warmup^(−1.5))',
+    keyNumbers: ['warmup = 4,000 步'],
+    relatedLabels: ['Adam 优化器参数'],
+    relatedConceptNames: ['Adam 与学习率预热'],
   },
   {
     type: 'metric',
@@ -231,6 +309,12 @@ const EXAMPLE_ELEMENTS: ExampleElement[] = [
     value: 'Transformer Base 在 WMT14 英德 newstest2014 上报告 BLEU 27.3，是 L2 复现的基础对照值。',
     quote: 'Transformer (base model) 27.3 38.1',
     page: 7,
+    section: '6.1 Machine Translation · Table 2',
+    detail:
+      '27.3 是 Base 模型英德主表的对照值，38.1 是英法结果。复现时应先确保 tokenization、大小写处理和评测脚本一致，再比较单次结果与论文的差距。',
+    keyNumbers: ['BLEU 27.3（英德）', 'BLEU 38.1（英法）'],
+    relatedLabels: ['Big 模型英德 BLEU', '标签平滑'],
+    relatedConceptNames: ['BLEU'],
   },
   {
     type: 'metric',
@@ -238,6 +322,12 @@ const EXAMPLE_ELEMENTS: ExampleElement[] = [
     value: 'Transformer Big 在 WMT14 英德 newstest2014 上报告 BLEU 28.4，是大模型复现目标。',
     quote: 'Transformer (big) 28.4 41.0',
     page: 7,
+    section: '6.1 Machine Translation · Table 2',
+    detail:
+      '28.4 与 41.0 分别对应英德、英法。Big 模型参数量与训练成本更高，复现前要确认显存和训练时长是否允许，并记录是否使用 checkpoint averaging 等未在表中说明的设置。',
+    keyNumbers: ['BLEU 28.4（英德）', 'BLEU 41.0（英法）'],
+    relatedLabels: ['Base 模型英德 BLEU', 'Big 模型训练算力'],
+    relatedConceptNames: ['BLEU'],
   },
   {
     type: 'compute',
@@ -245,6 +335,12 @@ const EXAMPLE_ELEMENTS: ExampleElement[] = [
     value: '论文的大模型配置使用 8 张 P100 训练 3.5 天，可据此估算复现成本并调整实验规模。',
     quote: 'Training took 3.5 days on 8 P100 GPUs.',
     page: 7,
+    section: '6.1 Machine Translation',
+    detail:
+      '8×P100 与 3.5 天是 Big 模型的训练口径，Base 模型约 12 小时。若本机算力不同，应记录等效 batch 与梯度累积方式；不能直接把小规模短跑结果与论文主表对比。',
+    keyNumbers: ['8 × P100', '3.5 天（Big）', '12 小时（Base）'],
+    relatedLabels: ['Big 模型英德 BLEU'],
+    relatedConceptNames: ['Adam 与学习率预热'],
   },
   {
     type: 'code',
@@ -253,6 +349,12 @@ const EXAMPLE_ELEMENTS: ExampleElement[] = [
     quote:
       'The code we used to train and evaluate our models is available at https://github.com/tensorflow/tensor2tensor',
     page: 7,
+    section: '6.1 Machine Translation',
+    detail:
+      '论文只给出仓库地址，没有给出 commit。复现时应记录提交哈希、依赖版本和使用的 hparams_set，并确认仓库中的默认配置与论文描述一致。',
+    keyNumbers: ['1 个官方仓库'],
+    relatedLabels: ['八头注意力', '学习率预热与衰减'],
+    relatedConceptNames: ['多头注意力', 'Adam 与学习率预热'],
   },
   {
     type: 'supplement',
@@ -261,6 +363,12 @@ const EXAMPLE_ELEMENTS: ExampleElement[] = [
     quote:
       'Figure 3: An example of the attention mechanism following long-distance dependencies in the encoder self-attention in layer 5 of 6. Many of the attention heads attend to a distant dependency of the verb “making”, completing the phrase “making...more difficult”.',
     page: 10,
+    section: 'Attention Visualizations',
+    detail:
+      '这些图不是定量指标，但能帮助判断模型是否学到长距离依赖。复现后可以抽取若干注意力头做可视化对照；若所有头都退化为局部注意力，应优先检查位置编码和掩码实现。',
+    keyNumbers: ['第 5 / 6 层'],
+    relatedLabels: ['八头注意力'],
+    relatedConceptNames: ['多头注意力', '位置编码'],
   },
 ]
 
@@ -289,7 +397,7 @@ function resourcesFor(
 
 type ConceptSeed = Omit<Concept, 'id' | 'projectId' | 'dependsOn' | 'createdAt'>
 
-const EXAMPLE_CONCEPTS: ConceptSeed[] = [
+export const EXAMPLE_CONCEPTS: ConceptSeed[] = [
   {
     name: 'Softmax',
     summary: '把一组实数分数归一化为非负且总和为 1 的概率分布。',
@@ -499,6 +607,7 @@ export async function loadExampleProject(
     if (existing?.id !== undefined) {
       await ensureExampleM2Data(existing.id, Date.now())
       await ensureExampleM3Data(existing.id, Date.now())
+      await backfillExampleDetails(existing.id, EXAMPLE_ELEMENTS)
       return { projectId: existing.id, existing: true }
     }
 

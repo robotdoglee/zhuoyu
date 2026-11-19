@@ -38,3 +38,4 @@
 | 34 | 2026-11-19 08:06 | 重启 TRAE 后发送 M4 收尾 prompt（prompts/10-m4-finish.md）：对比度静态计算、焦点环、终验 | 待查 | screenshots/2026-11-19_0806_34-m4-finish-prompt.png |
 | 35 | 2026-11-19 08:19 | 沙箱重启（TRAE 与 Xvfb 退出）；TRAE 收尾改动已落盘：--accent 调深为 #a94c26、summary 焦点环；复核对比度全部 ≥ 4.5:1，Vitest 35/35、lint 0、build 通过。M4 除实际部署外完成 | 待查 | — |
 | 36 | 2026-11-19 10:25 | 通过 TRAE 自带部署上线 https://37km306o1q81r6izvma.traesite.cn（公开）；首页、/skills、/project/1 刷新 200，载入示例正常；补了服务端无扩展名路径回退 index.html | 待查 | screenshots/2026-11-19_1025_36-deployed-traesite.png |
+| 37 | 2026-11-19 10:49 | 提示词 12 修复中：拆解卡片详情抽屉已上线可点开；首页一键导入示例排查中 | 待查 | screenshots/2026-11-19_1049_37-fix-cards-drawer-wip.png |

@@ -5,10 +5,7 @@ import AsyncState from '../components/AsyncState'
 import { db } from '../db/db'
 import { levelShort, type Paper, type Project } from '../db/types'
 import { formatDay } from '../lib/format'
-import { loadExampleProject } from '../lib/example'
-import { loadResnetExampleProject } from '../lib/resnetExample'
-
-type ExampleKind = 'attention' | 'resnet'
+import { EXAMPLE_DEFINITIONS, importExampleProject, type ExampleKind } from '../lib/examples'
 
 export default function HomePage() {
   const [projects, setProjects] = useState<Project[]>([])
@@ -22,16 +19,17 @@ export default function HomePage() {
   const navigate = useNavigate()
 
   async function openExample(kind: ExampleKind, reset = false) {
-    if (reset && !window.confirm(`确定重置${kind === 'attention' ? ' Attention ' : ' ResNet '}示例吗？该示例中的修改会被内置数据替换，其他项目不受影响。`)) {
+    const definition = EXAMPLE_DEFINITIONS[kind]
+    if (reset && !window.confirm(`确定重置 ${definition.shortTitle} 示例吗？该示例中的修改会被内置数据替换，其他项目不受影响。`)) {
       return
     }
     setExampleBusy(kind)
     setExampleError('')
     setFailedExample(null)
     try {
-      const loader = kind === 'attention' ? loadExampleProject : loadResnetExampleProject
-      const { projectId } = await loader({ reset })
-      navigate(`/project/${projectId}`)
+      const { path } = await importExampleProject(kind, { reset })
+      await load()
+      navigate(path)
     } catch (error) {
       setExampleError(error instanceof Error ? error.message : '示例载入失败，请重试。')
       setFailedExample({ kind, reset })
@@ -88,7 +86,13 @@ export default function HomePage() {
             <button className="btn btn-primary" onClick={() => setDialogOpen(true)}>
               新建复现项目
             </button>
-            <a className="btn btn-ghost" href="#examples">一键载入示例</a>
+            <button
+              className="btn btn-ghost"
+              disabled={exampleBusy !== null}
+              onClick={() => void openExample('attention')}
+            >
+              {exampleBusy ? '正在载入示例…' : '一键载入示例'}
+            </button>
             <a className="btn btn-quiet" href="#projects">浏览项目</a>
           </div>
         </div>
@@ -112,6 +116,17 @@ export default function HomePage() {
         </aside>
       </section>
 
+      {exampleError && (
+        <div className="notice error" role="alert">
+          <span>{exampleError}</span>
+          {failedExample && (
+            <button className="btn btn-ghost btn-sm" onClick={() => void openExample(failedExample.kind, failedExample.reset)}>
+              重试
+            </button>
+          )}
+        </div>
+      )}
+
       <section id="examples" className="examples-section" aria-labelledby="examples-title">
         <div className="section-title-row">
           <div>
@@ -120,16 +135,6 @@ export default function HomePage() {
           </div>
           <span className="section-sub">内置数据 · 不联网 · 随时重置</span>
         </div>
-        {exampleError && (
-          <div className="notice error" role="alert">
-            <span>{exampleError}</span>
-            {failedExample && (
-              <button className="btn btn-ghost btn-sm" onClick={() => void openExample(failedExample.kind, failedExample.reset)}>
-                重试
-              </button>
-            )}
-          </div>
-        )}
         <div className="example-grid">
           <article className="example-card">
             <div className="example-card-top">

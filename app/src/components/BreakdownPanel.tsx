@@ -1,10 +1,17 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { db } from '../db/db'
-import type { Element, ElementType, Paper, TextChunk } from '../db/types'
+import type { Concept, Element, ElementType, Paper, TextChunk } from '../db/types'
 import { verifyAnchor } from '../lib/anchors'
 import { chunkPaperPages } from '../lib/chunks'
-import { ELEMENT_TYPE_META, extractHeuristically, type ElementDraft } from '../lib/elements'
+import {
+  ELEMENT_TYPE_META,
+  elementTypeLabel,
+  extractHeuristically,
+  relatedConceptsOf,
+  relatedElementsOf,
+  type ElementDraft,
+} from '../lib/elements'
 import { extractWithLlm } from '../lib/llm'
 import { loadLlmSettings } from '../lib/settings'
 import { usePagination } from '../lib/usePagination'
@@ -18,10 +25,19 @@ interface BreakdownPanelProps {
   projectId: number
   paper?: Paper
   onShowSource: (page: number, quote?: string) => void
+  onOpenConcept?: (conceptId: number) => void
+  onOpenPlan?: (conceptId?: number) => void
 }
 
-export default function BreakdownPanel({ projectId, paper, onShowSource }: BreakdownPanelProps) {
+export default function BreakdownPanel({
+  projectId,
+  paper,
+  onShowSource,
+  onOpenConcept,
+  onOpenPlan,
+}: BreakdownPanelProps) {
   const [elements, setElements] = useState<Element[]>([])
+  const [concepts, setConcepts] = useState<Concept[]>([])
   const [chunks, setChunks] = useState<TextChunk[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
@@ -30,6 +46,7 @@ export default function BreakdownPanel({ projectId, paper, onShowSource }: Break
   const [notice, setNotice] = useState('')
   const [failedRequest, setFailedRequest] = useState<FailedRequest | null>(null)
   const [editing, setEditing] = useState<Element | 'new' | null>(null)
+  const [detail, setDetail] = useState<Element | null>(null)
   const settings = loadLlmSettings()
   const llmReady = Boolean(settings.apiKey && settings.model)
   const preferredMode: ExtractMode = llmReady ? 'llm' : 'heuristic'
@@ -38,7 +55,10 @@ export default function BreakdownPanel({ projectId, paper, onShowSource }: Break
     setLoading(true)
     setLoadError('')
     try {
-      const elementRows = await db.elements.where('projectId').equals(projectId).toArray()
+      const [elementRows, conceptRows] = await Promise.all([
+        db.elements.where('projectId').equals(projectId).toArray(),
+        db.concepts.where('projectId').equals(projectId).toArray(),
+      ])
       let chunkRows = paper?.id === undefined
         ? []
         : await db.chunks.where('paperId').equals(paper.id).toArray()
@@ -48,6 +68,7 @@ export default function BreakdownPanel({ projectId, paper, onShowSource }: Break
         chunkRows = generated
       }
       setElements(elementRows.sort((a, b) => a.createdAt - b.createdAt))
+      setConcepts(conceptRows.sort((a, b) => a.createdAt - b.createdAt))
       setChunks(chunkRows)
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : '拆解数据读取失败，请重试。')
@@ -260,14 +281,23 @@ export default function BreakdownPanel({ projectId, paper, onShowSource }: Break
                       const verified = verifyAnchor(paper?.pages ?? [], item.page, item.quote)
                       return (
                         <article className="element-item" key={item.id}>
-                          <div className="element-item-head">
-                            <strong>{item.label}</strong>
-                            <span className={`anchor-status ${verified ? 'verified' : 'unverified'}`}>
-                              {verified ? '✓ 已核实' : '待核实'}
+                          <button
+                            type="button"
+                            className="element-open"
+                            onClick={() => setDetail(item)}
+                            aria-haspopup="dialog"
+                            aria-label={`查看「${item.label}」的完整拆解详情`}
+                          >
+                            <span className="element-item-head">
+                              <strong>{item.label}</strong>
+                              <span className={`anchor-status ${verified ? 'verified' : 'unverified'}`}>
+                                {verified ? '✓ 已核实' : '待核实'}
+                              </span>
                             </span>
-                          </div>
-                          <p className="element-value">{item.value}</p>
-                          <blockquote>{item.quote || '未填写原文引文'}</blockquote>
+                            <span className="element-value">{item.value}</span>
+                            <span className="element-quote">{item.quote || '未填写原文引文'}</span>
+                            <span className="element-more" aria-hidden="true">查看详情 →</span>
+                          </button>
                           <footer>
                             <button
                               className="source-page-link"
@@ -300,12 +330,220 @@ export default function BreakdownPanel({ projectId, paper, onShowSource }: Break
           onSave={saveElement}
         />
       )}
+
+      {detail && (
+        <ElementDetailDrawer
+          element={detail}
+          allElements={elements}
+          concepts={concepts}
+          paper={paper}
+          onClose={() => setDetail(null)}
+          onShowSource={(page, quote) => {
+            setDetail(null)
+            onShowSource(page, quote)
+          }}
+          onOpenConcept={(conceptId) => {
+            setDetail(null)
+            onOpenConcept?.(conceptId)
+          }}
+          onOpenPlan={(conceptId) => {
+            setDetail(null)
+            onOpenPlan?.(conceptId)
+          }}
+          onOpenRelated={setDetail}
+          onEdit={() => {
+            setEditing(detail)
+            setDetail(null)
+          }}
+          onDelete={() => {
+            const target = detail
+            setDetail(null)
+            void deleteElement(target)
+          }}
+        />
+      )}
     </div>
   )
 }
 
 function sourceLabel(source: Element['source']): string {
   return source === 'llm' ? 'LLM' : source === 'heuristic' ? '启发式' : source === 'example' ? '示例' : '手工'
+}
+
+interface ElementDetailDrawerProps {
+  element: Element
+  allElements: Element[]
+  concepts: Concept[]
+  paper?: Paper
+  onClose: () => void
+  onShowSource: (page: number, quote?: string) => void
+  onOpenConcept: (conceptId: number) => void
+  onOpenPlan: (conceptId?: number) => void
+  onOpenRelated: (element: Element) => void
+  onEdit: () => void
+  onDelete: () => void
+}
+
+function ElementDetailDrawer({
+  element,
+  allElements,
+  concepts,
+  paper,
+  onClose,
+  onShowSource,
+  onOpenConcept,
+  onOpenPlan,
+  onOpenRelated,
+  onEdit,
+  onDelete,
+}: ElementDetailDrawerProps) {
+  const panelRef = useRef<HTMLElement>(null)
+  const verified = verifyAnchor(paper?.pages ?? [], element.page, element.quote)
+  const relatedElements = relatedElementsOf(element, allElements)
+  const relatedConcepts = relatedConceptsOf(element, concepts)
+  const primaryConceptId = relatedConcepts.find((concept) => concept.id !== undefined)?.id
+
+  useEffect(() => {
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const originalOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    panelRef.current?.focus()
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        onClose()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      document.body.style.overflow = originalOverflow
+      previous?.focus()
+    }
+  }, [onClose])
+
+  return (
+    <div
+      className="detail-backdrop"
+      onMouseDown={(event) => event.target === event.currentTarget && onClose()}
+    >
+      <aside
+        ref={panelRef}
+        className="element-detail"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="element-detail-title"
+        aria-describedby="element-detail-summary"
+        tabIndex={-1}
+      >
+        <header className="detail-head">
+          <div>
+            <p className="kicker">{elementTypeLabel(element.type)} / 拆解详情</p>
+            <h2 id="element-detail-title">{element.label}</h2>
+          </div>
+          <button type="button" className="detail-close" aria-label="关闭拆解详情" onClick={onClose}>×</button>
+        </header>
+
+        <div className="detail-body">
+          <p id="element-detail-summary" className="detail-summary">{element.value}</p>
+          <div className="detail-meta">
+            <span className={`anchor-status ${verified ? 'verified' : 'unverified'}`}>
+              {verified ? '✓ 引文已核实' : '待核实'}
+            </span>
+            <span>来源 · {sourceLabel(element.source)}</span>
+            <span>第 {element.page ?? '—'} 页</span>
+            {element.section && <span>章节 · {element.section}</span>}
+          </div>
+
+          <section className="detail-section" aria-labelledby="detail-explanation">
+            <h3 id="detail-explanation">详细解释</h3>
+            <p>{element.detail || '这条拆解还没有补充详细解释。点击下方「编辑这条拆解」可以把你的理解写进去。'}</p>
+          </section>
+
+          <section className="detail-section" aria-labelledby="detail-quote">
+            <h3 id="detail-quote">原文依据</h3>
+            <blockquote>{element.quote || '未填写原文引文'}</blockquote>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              disabled={!paper?.pages.length || !element.page}
+              onClick={() => element.page && onShowSource(element.page, element.quote)}
+            >第 {element.page ?? '—'} 页 · 查看原文 ↗</button>
+          </section>
+
+          {(element.formula || (element.keyNumbers?.length ?? 0) > 0) && (
+            <section className="detail-section" aria-labelledby="detail-formula">
+              <h3 id="detail-formula">公式与关键数字</h3>
+              {element.formula && <pre className="detail-formula">{element.formula}</pre>}
+              {element.keyNumbers && element.keyNumbers.length > 0 && (
+                <ul className="detail-numbers">
+                  {element.keyNumbers.map((number) => <li key={number}>{number}</li>)}
+                </ul>
+              )}
+            </section>
+          )}
+
+          <section className="detail-section" aria-labelledby="detail-related">
+            <h3 id="detail-related">关联</h3>
+            <div className="detail-related-group">
+              <span className="detail-related-label">其他拆解项</span>
+              {relatedElements.length > 0 ? (
+                <div className="detail-chips">
+                  {relatedElements.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className="detail-chip"
+                      onClick={() => onOpenRelated(item)}
+                    >{item.label}</button>
+                  ))}
+                </div>
+              ) : <p>暂未关联其他拆解项。</p>}
+            </div>
+            <div className="detail-related-group">
+              <span className="detail-related-label">知识点</span>
+              {relatedConcepts.length > 0 ? (
+                <div className="detail-chips">
+                  {relatedConcepts.map((concept) => (
+                    <button
+                      key={concept.id ?? concept.name}
+                      type="button"
+                      className="detail-chip"
+                      disabled={concept.id === undefined}
+                      onClick={() => concept.id !== undefined && onOpenConcept(concept.id)}
+                    >{concept.name}</button>
+                  ))}
+                </div>
+              ) : <p>暂未关联知识点。</p>}
+            </div>
+          </section>
+
+          <section className="detail-section" aria-labelledby="detail-jump">
+            <h3 id="detail-jump">跳到对应节点</h3>
+            <div className="detail-jump">
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                disabled={primaryConceptId === undefined}
+                onClick={() => primaryConceptId !== undefined && onOpenConcept(primaryConceptId)}
+              >在知识框图中查看</button>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => onOpenPlan(primaryConceptId)}
+              >在复现计划中查看</button>
+            </div>
+          </section>
+        </div>
+
+        <footer className="detail-actions">
+          <button type="button" className="btn btn-quiet" onClick={onEdit}>编辑这条拆解</button>
+          <button type="button" className="btn btn-quiet danger" onClick={onDelete}>删除</button>
+        </footer>
+      </aside>
+    </div>
+  )
 }
 
 interface ElementDialogProps {

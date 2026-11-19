@@ -71,13 +71,17 @@ function ConceptNode({ data }: NodeProps<ConceptFlowNode>) {
 
 const nodeTypes = { concept: ConceptNode }
 
-interface KnowledgeMapProps { projectId: number }
+interface KnowledgeMapProps {
+  projectId: number
+  focusConceptId?: number
+  focusNonce?: number
+}
 
 export default function KnowledgeMap(props: KnowledgeMapProps) {
   return <ReactFlowProvider><KnowledgeMapInner {...props} /></ReactFlowProvider>
 }
 
-function KnowledgeMapInner({ projectId }: KnowledgeMapProps) {
+function KnowledgeMapInner({ projectId, focusConceptId, focusNonce }: KnowledgeMapProps) {
   const [concepts, setConcepts] = useState<Concept[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
@@ -153,6 +157,9 @@ function KnowledgeMapInner({ projectId }: KnowledgeMapProps) {
             type: 'concept' as const,
             position: existing?.position ?? concept.position ?? layout.get(id) ?? { x: 0, y: 0 },
             deletable: false,
+            selected: focusConceptId === undefined
+              ? (existing?.selected ?? false)
+              : concept.id === focusConceptId,
             data: { concept, onOpen: openConcept, onMastery: changeMastery, onDelete: deleteConcept },
           }]
         })
@@ -163,7 +170,21 @@ function KnowledgeMapInner({ projectId }: KnowledgeMapProps) {
       })
     }, 0)
     return () => window.clearTimeout(timer)
-  }, [concepts, deleteConcept, openConcept, changeMastery])
+  }, [concepts, deleteConcept, openConcept, changeMastery, focusConceptId])
+
+  useEffect(() => {
+    if (focusConceptId === undefined) return
+    if (!concepts.some((concept) => concept.id === focusConceptId)) return
+    const timer = window.setTimeout(() => {
+      void fitView({
+        nodes: [{ id: String(focusConceptId) }],
+        duration: 500,
+        padding: 1.4,
+        maxZoom: 1.1,
+      })
+    }, 180)
+    return () => window.clearTimeout(timer)
+  }, [focusConceptId, focusNonce, concepts, fitView])
 
   const learningPath = useMemo(() => buildLearningPath(concepts), [concepts])
   const cycleMembers = useMemo(() => findCycleMembers(concepts), [concepts])

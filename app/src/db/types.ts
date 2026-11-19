@@ -117,6 +117,18 @@ export interface Element {
   page?: number
   /** 引文是否在当前论文分页文本中匹配成功 */
   verified?: boolean
+  /** 详细解释：这条事实在复现中的含义、易错点与落地方式 */
+  detail?: string
+  /** 原文所在章节或小节，例如「3.2.2 Multi-Head Attention」 */
+  section?: string
+  /** 相关公式或关键符号表达式 */
+  formula?: string
+  /** 关键数字清单，例如「6 层」「8 头」「d_model = 512」 */
+  keyNumbers?: string[]
+  /** 关联的其他拆解项 label，用于卡片之间互相跳转 */
+  relatedLabels?: string[]
+  /** 关联知识点名称，与概念卡片 name 对应 */
+  relatedConceptNames?: string[]
   source?: 'llm' | 'heuristic' | 'manual' | 'example'
   createdAt: number
 }
