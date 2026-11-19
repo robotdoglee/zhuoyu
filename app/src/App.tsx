@@ -34,7 +34,7 @@ function SiteFooter() {
     <footer className="site-footer">
       <div className="container footer-inner">
         <span>琢玉 · 把论文亲手做一遍</span>
-        <span>M3 复盘、导出与技能树 · 无后端 · 数据留在浏览器</span>
+        <span>M0–M4 已完成 · 无后端 · 数据留在浏览器</span>
       </div>
     </footer>
   )

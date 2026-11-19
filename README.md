@@ -67,7 +67,7 @@
 cd app
 npm install
 npm run dev                  # 开发预览，默认 http://localhost:5173
-npm test -- --pool=threads   # Vitest：11 个测试文件、35 条用例
+npm test -- --pool=threads   # Vitest：14 个测试文件、49 条用例
 npm run build                # 类型检查 + 生产构建，输出 app/dist
 npm run lint                 # oxlint 静态检查
 npm run preview              # 预览生产构建
@@ -98,11 +98,13 @@ zhuoyu/
 │       │   ├── SkillsPage.tsx     # 跨项目技能图谱、来源与成长时间线
 │       │   └── SettingsPage.tsx   # OpenAI 兼容接口设置与一键清除
 │       ├── components/
+│       │   ├── BrandMark.tsx      # 刻刀破玉品牌图标
 │       │   ├── BreakdownPanel.tsx # 分块、九类拆解、抽取与引文校验
 │       │   ├── KnowledgeMap.tsx   # 概念 DAG、依赖编辑与学习路径
 │       │   ├── PlanPanel.tsx      # 三级计划、编辑排序与历史版本
 │       │   ├── NotebookPanel.tsx  # Markdown 记录、@引用、隐藏细节与报错助手
 │       │   ├── MetricTable.tsx    # 指标偏差与方向颜色
+│       │   ├── NewProjectDialog.tsx # 新建项目对话框与表单校验
 │       │   ├── RetrospectivePanel.tsx # 复盘汇总、补写、润色与保存
 │       │   ├── ExportPanel.tsx    # 五种本地导出入口
 │       │   ├── ConceptDialog.tsx  # 概念卡与分层资源编辑/检索
@@ -117,13 +119,16 @@ zhuoyu/
 │           ├── chunks.ts      # 页内偏移分块
 │           ├── elements.ts    # 九类定义与无 Key 启发式抽取
 │           ├── llm.ts         # LLM 请求、重试与 zod 校验
+│           ├── metadata.ts    # arXiv / DOI 元数据检索与 OpenAlex 回退
 │           ├── plan.ts        # 三级模板、排序与重新规划
 │           ├── planLlm.ts     # LLM 计划生成与结构化校验
 │           ├── metrics.ts     # 指标差值、偏差与方向判定
 │           ├── errorAssistant.ts # 日志诊断与记事本 Markdown
+│           ├── format.ts      # 日期、作者与数字格式化
 │           ├── projectData.ts # 复盘与导出共用的项目事实聚合
 │           ├── retrospective.ts # 本地复盘模板与指标事实汇总
 │           ├── retrospectiveLlm.ts # 用户主动触发的复盘润色
+│           ├── settings.ts    # LLM 地址、模型与 Key 的本地读写和清除
 │           ├── exporters.ts   # Markdown / Obsidian / JSON / Anki CSV
 │           ├── pdfExport.ts   # 中文 PDF 与 Mermaid 框图渲染
 │           ├── skills.ts      # 跨项目概念去重、来源与成长聚合
@@ -131,6 +136,8 @@ zhuoyu/
 │           ├── graph.ts       # 学习路径与循环检测
 │           ├── resources.ts   # 公开资源检索与分层
 │           ├── example.ts     # Attention 内置示例与 M3 复盘数据
+│           ├── exampleDetails.ts # 旧示例卡片详情字段的幂等补齐
+│           ├── examples.ts    # 首页与 hero 共用的示例注册表
 │           ├── resnetExample.ts # ResNet on CIFAR-10 内置完整示例
 │           ├── pdf.ts         # PDF 分批解析、进度、取消与主线程让出
 │           ├── pagination.ts  # 200 条阈值与每页 50 条分页
@@ -217,7 +224,7 @@ zhuoyu/
 
 ## M4 验收
 
-- `npm run lint`：0 warning、0 error；`npm test -- --pool=threads`：11 个测试文件、35 条用例；`npm run build`：通过，构建包含 `_redirects` 与 `404.html`。
+- `npm run lint`：0 warning、0 error；`npm test -- --pool=threads`：14 个测试文件、49 条用例；`npm run build`：通过，构建包含 `_redirects` 与 `404.html`。
 - 双示例一键载入、五个标签切换与 ResNet 重置已在浏览器走通；101 页 PDF 的分批解析、进度与取消测试通过，取消不保存半成品。
 - 真实 375px Chromium 下，首页、ResNet 五个标签、设置和技能树的 `document` / `body` 宽度均为 375px；宽表格仅在自身容器内滚动。
 - 键盘新建项目、方向键切换标签、勾选检查点和导出控件聚焦通过；未触发系统下载对话框。按钮与输入的 `:focus-visible` 均为 2px 实心焦点环。
