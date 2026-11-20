@@ -5,7 +5,7 @@
 
 琢玉是一个**本地优先**的论文复现工作台：导入一篇论文，拆解方法、补齐背景、排好计划、记录实验、完成复盘。没有后端，所有业务数据都存在浏览器 IndexedDB 里。
 
-当前进度：**M4 打磨、双示例与静态部署准备**。M0 项目骨架、M1 论文拆解与知识框图、M2 计划与实验记录、M3 复盘与成长沉淀、M4 示例与体验优化均已可用；本轮不实际上线，部署平台待定。路线图与验收标准见 [PLAN.md](./PLAN.md)，产品设计见 [DESIGN.md](./DESIGN.md)。
+当前进度：**M4 打磨、双示例与静态部署已完成**。M0 项目骨架、M1 论文拆解与知识框图、M2 计划与实验记录、M3 复盘与成长沉淀、M4 示例与体验优化均已可用；已部署上线：在线体验 <https://37km306o1q81r6izvma.traesite.cn>。路线图与验收标准见 [PLAN.md](./PLAN.md)，产品设计见 [DESIGN.md](./DESIGN.md)。
 
 ---
 
@@ -230,7 +230,7 @@ zhuoyu/
 - 键盘新建项目、方向键切换标签、勾选检查点和导出控件聚焦通过；未触发系统下载对话框。按钮与输入的 `:focus-visible` 均为 2px 实心焦点环。
 - 对比度实测：正文 `--ink` / `--bg` 为 15.80:1，次级正文 `--ink-soft` / `--bg` 为 6.05:1、在卡片上为 6.32:1，主按钮文字 / 底色为 5.55:1，强调色文字在 `--accent-soft` 上为 4.79:1，全部 ≥ 4.5:1。
 - 键盘焦点：`a`、`button`、`input`、`textarea`、`select`、`summary`、`[role="button"]`、`[tabindex]` 均使用 2px 实心焦点环并 `!important` 覆盖输入框的 `outline: none`。
-- 首页、设置与技能树浏览器 Console error 为 0；子路由可直接打开。本轮只完成静态部署准备，未部署上线。
+- 首页、设置与技能树浏览器 Console error 为 0；子路由可直接打开。已部署到 TRAE My Sites，线上首页与子路由均可直接打开。
 
 ## 技术栈
 
@@ -238,7 +238,7 @@ React 19 · TypeScript · Vite 8 · React Router 7 · Dexie 4（IndexedDB）· p
 
 ## 部署
 
-`npm run build` 产物为纯静态文件（`app/dist`），Vite `base` 为 `/`。由于使用 `BrowserRouter`，部署时必须把未知路径回退到 `index.html`（SPA fallback），否则直接刷新 `/project/:id` 会 404。仓库同时准备两种通用方案，部署平台待定，本轮未实际上线：
+`npm run build` 产物为纯静态文件（`app/dist`），Vite `base` 为 `/`。由于使用 `BrowserRouter`，部署时必须把未知路径回退到 `index.html`（SPA fallback），否则直接刷新 `/project/:id` 会 404。当前线上版本部署在 TRAE My Sites（<https://37km306o1q81r6izvma.traesite.cn>）；仓库同时保留两种通用方案，便于自行部署：
 
 - **支持 `_redirects` 的平台**（如 Netlify、Cloudflare Pages）：构建会带上 `dist/_redirects`，内容为 `/* /index.html 200`，直接把所有未知路径重写到应用入口。
 - **以自定义 404 页回退的平台**（如 GitHub Pages）：构建会带上 `dist/404.html`。未知路径先进入该页，把当前 path、query 与 hash 暂存到 `sessionStorage`，再返回 `/`；`index.html` 内联脚本用 `history.replaceState` 恢复原地址，随后由 React Router 渲染，刷新后仍停留在原子路由。
